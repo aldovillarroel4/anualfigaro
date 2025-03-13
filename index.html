@@ -1,0 +1,117 @@
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FIGARO AÑO</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header-container">
+            <div class="title-year-container">
+                <h1>FIGARO AÑO</h1>
+                <select id="yearSelector" class="year-selector">
+                    <!-- Years will be populated dynamically -->
+                </select>
+            </div>
+            <div class="header-buttons">
+                <button class="transfer-button" onclick="transferToNextMonth()">TRASPASO</button>
+                <div class="dropdown">
+                    <button class="dropbtn">RESPALDO</button>
+                    <div class="dropdown-content">
+                        <button onclick="backupData()" class="backup-btn">Respaldar</button>
+                        <button onclick="restoreData()" class="restore-btn">Restaurar</button>
+                        <input type="file" id="fileInput" style="display: none" onchange="handleFileSelect(event)">
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="tabs" id="monthTabs">
+            <!-- Las pestañas de meses se generarán dinámicamente -->
+        </div>
+
+        <div class="tables-container">
+            <!-- Tabla de Ingresos -->
+            <div class="income-section">
+                <h2>INGRESOS</h2>
+                <table id="incomeTable">
+                    <thead>
+                        <tr>
+                            <th>ITEM</th>
+                            <th>MONTO</th>
+                        </tr>
+                    </thead>
+                    <tbody id="incomeBody">
+                        <!-- Filas de ingresos se agregarán aquí -->
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td>TOTAL INGRESOS</td>
+                            <td id="totalIncome">0</td>
+                        </tr>
+                    </tfoot>
+                </table>
+                <button onclick="addIncomeRow()">+ Agregar Ingreso</button>
+            </div>
+
+            <!-- Tabla de Egresos -->
+            <div class="expenses-section">
+                <h2>EGRESOS</h2>
+                <table id="expensesTable">
+                    <thead>
+                        <tr>
+                            <th>ITEM</th>
+                            <th>MONTO</th>
+                            <th>2DO PISO</th>
+                        </tr>
+                    </thead>
+                    <tbody id="expensesBody">
+                        <!-- Filas de egresos se agregarán aquí -->
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td>TOTAL EGRESOS</td>
+                            <td id="totalExpenses">0</td>
+                            <td id="total2ndFloor">0</td>
+                        </tr>
+                    </tfoot>
+                </table>
+                <button onclick="addExpenseRow()">+ Agregar Egreso</button>
+            </div>
+        </div>
+
+        <div class="final-balance">
+            <h2>BALANCE MENSUAL</h2>
+            <p>Total: <span id="finalBalance">0</span></p>
+        </div>
+
+        <div class="final-balance annual-balance">
+            <div class="balance-section">
+                <h2>BALANCE AÑO ACTUAL</h2>
+                <div class="annual-indicators">
+                    <p>Utilidad Total Año: <span id="annualProfit">0</span></p>
+                    <p>Utilidad Promedio Mensual: <span id="averageMonthlyProfit">0</span></p>
+                    <p>Ingreso Promedio Mensual: <span id="averageMonthlyIncome">0</span></p>
+                </div>
+            </div>
+            <div class="balance-section">
+                <h2>BALANCE AÑO ANTERIOR</h2>
+                <div class="annual-indicators">
+                    <p>Utilidad Total Año: <span id="prevAnnualProfit">0</span></p>
+                    <p>Utilidad Promedio Mensual: <span id="prevAverageMonthlyProfit">0</span></p>
+                    <p>Ingreso Promedio Mensual: <span id="prevAverageMonthlyIncome">0</span></p>
+                </div>
+            </div>
+            <div class="balance-section">
+                <h2>INDICADORES</h2>
+                <div class="annual-indicators">
+                    <p>Variación Utilidad Total: <span id="profitVariation">0%</span></p>
+                    <p>Variación Utilidad Promedio: <span id="avgProfitVariation">0%</span></p>
+                    <p>Variación Ingreso Promedio: <span id="avgIncomeVariation">0%</span></p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
