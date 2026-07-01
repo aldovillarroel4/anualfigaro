@@ -7,6 +7,114 @@ let financialData = {};
 let currentMonth = '';
 let selectedYear = new Date().getFullYear();
 
+/* --- Column resizing utilities --- */
+function setupResizableHeaders(tableId) {
+    const table = document.getElementById(tableId);
+    if (!table) return;
+    const header = table.querySelector('thead tr');
+    if (!header) return;
+
+    // Add resizer handles to each th if not already present
+    Array.from(header.children).forEach((th, idx) => {
+        if (!th.querySelector('.th-resizer')) {
+            const resizer = document.createElement('div');
+            resizer.className = 'th-resizer';
+            resizer.dataset.colIndex = idx;
+            th.appendChild(resizer);
+
+            resizer.addEventListener('mousedown', initResize);
+            // also support touch
+            resizer.addEventListener('touchstart', initResize, { passive: true });
+        }
+    });
+}
+
+let resizing = {
+    tableId: null,
+    startX: 0,
+    startWidth: 0,
+    colIndex: 0,
+    th: null
+};
+
+function initResize(e) {
+    e.preventDefault();
+    const isTouch = e.type === 'touchstart';
+    const target = isTouch ? e.targetTouches[0] : e;
+    const resizer = isTouch ? e.target : e.target;
+    const th = resizer.parentElement;
+    const table = th.closest('table');
+    resizing.tableId = table.id;
+    resizing.th = th;
+    resizing.colIndex = Number(resizer.dataset.colIndex);
+    resizing.startX = isTouch ? target.clientX : e.clientX;
+    resizing.startWidth = th.offsetWidth;
+    document.addEventListener(isTouch ? 'touchmove' : 'mousemove', doResize, { passive: false });
+    document.addEventListener(isTouch ? 'touchend' : 'mouseup', stopResize);
+}
+
+function doResize(e) {
+    const isTouch = e.type === 'touchmove';
+    const clientX = isTouch ? e.touches[0].clientX : e.clientX;
+    const dx = clientX - resizing.startX;
+    const newWidth = Math.max(50, resizing.startWidth + dx);
+    // Set width on th and corresponding tds via colgroup-less approach: set inline style on all cells of that column
+    const table = document.getElementById(resizing.tableId);
+    if (!table) return;
+    // Apply to header cell
+    resizing.th.style.width = newWidth + 'px';
+    // Apply to every row cell at same index
+    Array.from(table.querySelectorAll('tbody tr')).forEach(row => {
+        const cell = row.children[resizing.colIndex];
+        if (cell) cell.style.width = newWidth + 'px';
+    });
+    // Save width to year settings
+    saveColumnWidthForYear(selectedYear, resizing.tableId, resizing.colIndex, newWidth);
+    e.preventDefault();
+}
+
+function stopResize(e) {
+    const isTouch = e.type === 'touchend';
+    document.removeEventListener(isTouch ? 'touchmove' : 'mousemove', doResize);
+    document.removeEventListener(isTouch ? 'touchend' : 'mouseup', stopResize);
+    resizing = { tableId: null, startX: 0, startWidth: 0, colIndex: 0, th: null };
+}
+
+function saveColumnWidthForYear(year, tableId, colIndex, width) {
+    if (!allYearsData[year]) allYearsData[year] = {};
+    if (!allYearsData[year].columnWidths) allYearsData[year].columnWidths = {};
+    if (!allYearsData[year].columnWidths[tableId]) allYearsData[year].columnWidths[tableId] = {};
+    allYearsData[year].columnWidths[tableId][colIndex] = width;
+    saveData();
+}
+
+function applyStoredColumnWidths(tableId) {
+    const wd = allYearsData[selectedYear] && allYearsData[selectedYear].columnWidths && allYearsData[selectedYear].columnWidths[tableId];
+    const table = document.getElementById(tableId);
+    if (!table || !wd) return;
+    const headerCells = table.querySelectorAll('thead tr th');
+    headerCells.forEach((th, idx) => {
+        const w = wd[idx];
+        if (w) {
+            th.style.width = w + 'px';
+            Array.from(table.querySelectorAll('tbody tr')).forEach(row => {
+                const cell = row.children[idx];
+                if (cell) cell.style.width = w + 'px';
+            });
+        }
+    });
+}
+
+/* Small helper to avoid injection when rendering values into inputs */
+function escapeHtml(str) {
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
 // Inicializar la aplicación
 function init() {
     // Asegurarse de que existan datos para el año seleccionado
@@ -77,7 +185,22 @@ function loadMonthData() {
         const row = createExpenseRow(item, index);
         expensesBody.appendChild(row);
     });
-    
+
+    // Ensure inputs adapt to column width (in case rows were created programmatically)
+    // inputs already use width:100% in CSS; but enforce style in case inline widths were set
+    document.querySelectorAll('#incomeTable tbody tr td input, #expensesTable tbody tr td input').forEach(inp => {
+        inp.style.width = '100%';
+        inp.style.boxSizing = 'border-box';
+    });
+
+    // Apply any stored column widths for the selected year so the change reflects across months
+    applyStoredColumnWidths('incomeTable');
+    applyStoredColumnWidths('expensesTable');
+
+    // Add resizer handles to headers (idempotent)
+    setupResizableHeaders('incomeTable');
+    setupResizableHeaders('expensesTable');
+
     updateTotals();
 }
 
@@ -189,6 +312,31 @@ function updateTotals() {
     const finalBalance = totalIncome - totalExpenses;
     document.getElementById('finalBalance').textContent = formatCLP(finalBalance);
 
+    // Calcular balance del mismo mes en año anterior y variación mensual
+    const prevYear = selectedYear - 1;
+    let prevMonthBalance = 0;
+    if (allYearsData[prevYear] && allYearsData[prevYear][currentMonth]) {
+        const pm = allYearsData[prevYear][currentMonth];
+        const prevIncome = Array.isArray(pm.income) ? pm.income.reduce((s,i) => s + (Number(i.amount)||0), 0) : 0;
+        const prevExpenses = Array.isArray(pm.expenses) ? pm.expenses.reduce((s,i) => s + (Number(i.amount)||0), 0) : 0;
+        prevMonthBalance = prevIncome - prevExpenses;
+    }
+    const prevBalanceEl = document.getElementById('prevMonthBalance');
+    const monthVarEl = document.getElementById('monthVariation');
+    if (prevBalanceEl) prevBalanceEl.textContent = formatCLP(prevMonthBalance);
+
+    // Calculate percentage variation for the month (compared to previous year's same month)
+    let monthVariation = 0;
+    if (prevMonthBalance === 0) {
+        monthVariation = finalBalance > 0 ? 100 : 0;
+    } else {
+        monthVariation = ((finalBalance - prevMonthBalance) / Math.abs(prevMonthBalance)) * 100;
+    }
+    if (monthVarEl) {
+        monthVarEl.textContent = `${monthVariation.toFixed(1)}%`;
+        monthVarEl.className = monthVariation > 0 ? 'variation-positive' : 'variation-negative';
+    }
+
     // Actualizar indicadores anuales
     updateAnnualIndicators();
     
@@ -218,10 +366,16 @@ function getYearTotals(year) {
     let totalExpenses = 0;
     let monthsWithData = 0;
 
-    if (allYearsData[year]) {
-        Object.values(allYearsData[year]).forEach(monthData => {
-            const monthIncome = monthData.income.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-            const monthExpenses = monthData.expenses.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+    const yearData = allYearsData[year];
+    if (yearData && typeof yearData === 'object') {
+        Object.values(yearData).forEach(monthData => {
+            // Guard against undefined or malformed monthData
+            if (!monthData || typeof monthData !== 'object') return;
+            const incomeArray = Array.isArray(monthData.income) ? monthData.income : [];
+            const expensesArray = Array.isArray(monthData.expenses) ? monthData.expenses : [];
+
+            const monthIncome = incomeArray.reduce((sum, item) => sum + (Number(item && item.amount) || 0), 0);
+            const monthExpenses = expensesArray.reduce((sum, item) => sum + (Number(item && item.amount) || 0), 0);
 
             if (monthIncome > 0 || monthExpenses > 0) {
                 monthsWithData++;
@@ -391,6 +545,20 @@ function initializeYearSelector() {
         financialData = allYearsData[selectedYear];
         init();
     });
+}
+
+/* Change the selected year by delta (-1 or +1) */
+function changeYear(delta) {
+    const yearSelector = document.getElementById('yearSelector');
+    let newYear = selectedYear + delta;
+    // Clamp to available options (2018-2070)
+    newYear = Math.max(2018, Math.min(2070, newYear));
+    if (newYear === selectedYear) return;
+    selectedYear = newYear;
+    yearSelector.value = selectedYear;
+    if (!allYearsData[selectedYear]) allYearsData[selectedYear] = {};
+    financialData = allYearsData[selectedYear];
+    init();
 }
 
 function transferToNextMonth() {

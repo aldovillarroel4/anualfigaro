@@ -10,9 +10,13 @@
         <div class="header-container">
             <div class="title-year-container">
                 <h1>FIGARO AÑO</h1>
-                <select id="yearSelector" class="year-selector">
-                    <!-- Years will be populated dynamically -->
-                </select>
+                <div class="year-nav">
+                    <button class="year-nav-btn" id="prevYearBtn" onclick="changeYear(-1)" aria-label="Año anterior">◀</button>
+                    <select id="yearSelector" class="year-selector" aria-label="Seleccionar año">
+                        <!-- Years will be populated dynamically -->
+                    </select>
+                    <button class="year-nav-btn" id="nextYearBtn" onclick="changeYear(1)" aria-label="Año siguiente">▶</button>
+                </div>
             </div>
             <div class="header-buttons">
                 <button class="transfer-button" onclick="transferToNextMonth()">TRASPASO</button>
@@ -80,9 +84,16 @@
             </div>
         </div>
 
-        <div class="final-balance">
-            <h2>BALANCE MENSUAL</h2>
-            <p>Total: <span id="finalBalance">0</span></p>
+        <div class="final-balance monthly-comparison-container">
+            <div class="final-balance monthly-current">
+                <h2>BALANCE MENSUAL</h2>
+                <p>Total: <span id="finalBalance">0</span></p>
+            </div>
+            <div class="final-balance monthly-prev">
+                <h2>BALANCE AÑO ANTERIOR (mismo mes)</h2>
+                <p>Total: <span id="prevMonthBalance">0</span></p>
+                <p class="month-variation">Variación: <span id="monthVariation">0%</span></p>
+            </div>
         </div>
 
         <div class="final-balance annual-balance">
