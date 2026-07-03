@@ -122,6 +122,39 @@
                 </div>
             </div>
         </div>
+
+        <!-- RESUMEN HISTÓRICO -->
+        <div class="historical-summary">
+            <h2>RESUMEN HISTÓRICO</h2>
+            <div class="historical-content">
+                
+                <div class="historical-table-wrapper">
+                    <table class="historical-table">
+                        <thead>
+                            <tr>
+                                <th rowspan="2">MES</th>
+                                <th rowspan="2">
+                                    <div class="totals-header">
+                                        <span class="totals-title">TOTALES</span>
+                                        <button class="plus-icon" aria-label="Agregar" onclick="addHistoricalYearColumn()">+</button>
+                                    </div>
+                                </th>
+                                <th colspan="2">2022</th>
+                            </tr>
+                            <tr>
+                                <th>ALDO</th>
+                                <th>MARCOS</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historicalBody">
+                            <!-- Filas de resumen histórico generadas dinámicamente -->
+                        </tbody>
+
+                    </table>
+                </div>
+            </div>
+        </div>
+
     </div>
     <script src="script.js"></script>
 </body>

@@ -466,3 +466,255 @@ tfoot td {
     gap: 10px;
     align-items: center;
 }
+
+/* RESUMEN HISTÓRICO */
+.historical-summary {
+    margin-top: 20px;
+    background-color: white;
+    border: 2px solid #ffcdd2;
+    box-shadow: 0 0 10px rgba(196, 30, 58, 0.06);
+    border-radius: 6px;
+    padding: 16px;
+}
+
+.historical-summary h2 {
+    color: #c41e3a;
+    margin-bottom: 10px;
+    font-size: 1.1em;
+}
+
+.historical-content .hint {
+    color: #777;
+    font-size: 0.95em;
+    margin-bottom: 12px;
+}
+
+/* Table for historical summary */
+.historical-table-wrapper {
+    overflow: auto;
+}
+
+.historical-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #fff;
+    table-layout: auto; /* allow columns to size to content */
+}
+
+.historical-table thead th {
+    background: #c41e3a;
+    color: #fff;
+    padding: 8px 10px;
+    text-align: center;
+    font-weight: 700;
+    /* add clearer vertical dividers in header */
+    border-right: 3px solid rgba(0,0,0,0.08);
+}
+
+/* Totals header with small "+" icon aligned to extreme right of the column */
+.totals-header {
+    position: relative;
+    display: block;          /* span full width of the header cell so button can align to column edge */
+    width: 100%;
+    padding-right: 0;        /* no extra inset; button will sit at the column edge */
+    line-height: 1;
+    vertical-align: middle;
+}
+
+.totals-title {
+    display: inline-block;
+    font-weight: 700;
+    color: #fff;
+}
+
+/* Circular plus button positioned at the extreme right edge of the column header, vertically centered */
+.plus-icon {
+    position: absolute;
+    top: 50%;
+    right: 4px;               /* place near the column's right edge */
+    transform: translateY(-50%);
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255,255,255,0.18);
+    color: #fff;
+    font-weight: 700;
+    font-size: 16px;
+    line-height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+}
+
+.plus-icon:hover {
+    background: rgba(255,255,255,0.25);
+}
+
+.historical-table tbody td,
+.historical-table tfoot td {
+    padding: 1px 3px;
+    border: 1px solid #fff0f0;
+    color: #333;
+    vertical-align: middle;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: normal; /* allow multi-line content for stacked totals */
+    line-height: 1;
+    font-size: 0.92em;
+}
+
+/* Stronger divider between main columns (MES, TOTALES, each year pair) */
+.historical-table tbody td:nth-child(2),
+.historical-table thead th:nth-child(2),
+.historical-table tbody td:nth-child(1),
+.historical-table thead th:nth-child(1) {
+    border-right: 3px solid rgba(0,0,0,0.08);
+}
+
+/* For the sequence of year columns: make a clear divider after every year pair (columns 4,6,8,...).
+   Target even columns starting from the 4th so the divider appears between each year's two subcolumns. */
+.historical-table tbody td:nth-child(n+4):nth-child(even),
+.historical-table thead th:nth-child(n+4):nth-child(even) {
+    border-right: 3px solid rgba(0,0,0,0.08);
+}
+
+/* Subcolumns (the individual ALDO / MARCOS cells) have a subtler separation */
+.historical-table tbody td:nth-child(n+3),
+.historical-table thead th:nth-child(n+3),
+.historical-table tfoot td:nth-child(n+3) {
+    border-right: 1px solid rgba(0,0,0,0.04);
+}
+
+/* Ensure the very last cell in a row doesn't get an extra thick border on the right */
+.historical-table tbody tr td:last-child,
+.historical-table thead tr th:last-child,
+.historical-table tfoot tr td:last-child {
+    border-right: 1px solid rgba(0,0,0,0.04);
+}
+
+.historical-table tbody tr:nth-child(odd) {
+    background: #fff5f5;
+}
+
+.historical-table tfoot td {
+    font-weight: 700;
+    background: #fff5f5;
+    color: #c41e3a;
+}
+
+/* Make MES and TOTALES shrink-to-fit; year columns are flexible and centered */
+.historical-table thead th:nth-child(1),
+.historical-table tbody td:nth-child(1),
+.historical-table thead th:nth-child(2),
+.historical-table tbody td:nth-child(2) {
+    white-space: nowrap;
+    width: 1px; /* shrink-to-fit */
+    max-width: 220px;
+    text-align: center;
+    overflow: visible;
+}
+
+/* Center all year-related columns (any column from the 3rd onward) so ALDO/MARCOS stay aligned regardless of how many years are added */
+.historical-table thead th:nth-child(n+3),
+.historical-table tbody td:nth-child(n+3),
+.historical-table tfoot td:nth-child(n+3) {
+    text-align: center;
+}
+
+/* Style for historical editable inputs (ALDO / MARCOS fields) */
+.histor-input-wrapper { display:flex; justify-content:center; }
+.histor-input {
+    width: 100px;
+    max-width: 100%;
+    padding: 4px 6px;
+    border: 1px solid #ffcdd2;
+    border-radius: 4px;
+    text-align: center;
+    font-size: 0.88em;
+    background: #fff;
+    box-sizing: border-box;
+    margin: 2px 0; /* reduced vertical spacing for compact rows */
+}
+
+/* Make the stacked content of table columns share a uniform vertical container per row.
+   Use flex with space-between so the stacked lines align across all year columns. */
+.historical-table tbody tr td > .stacked-lines,
+.historical-table tbody tr td > div.stacked-lines,
+.historical-table tbody td > div {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    min-height: 34px;
+    padding: 2px 2px;
+    box-sizing: border-box;
+    gap: 2px;
+}
+
+/* Ensure each individual stacked line has consistent min-height and centering */
+.historical-table tbody tr td > div > div,
+.historical-table tbody tr td > div > .histor-input,
+.historical-table tbody tr td > div > input.histor-input,
+.historical-table tbody tr td > div > span,
+.historical-table tbody tr td > div > strong {
+    min-height: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+}
+
+/* Ensure each individual stacked line has consistent min-height and centering */
+.historical-table tbody tr td > div > div,
+.historical-table tbody tr td > div > .histor-input,
+.historical-table tbody tr td > div > input.histor-input,
+.historical-table tbody tr td > div > span,
+.historical-table tbody tr td > div > strong {
+    min-height: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+}
+
+/* Match input heights and remove extra vertical padding so visual baselines align */
+.histor-input {
+    height: 18px;
+    padding: 1px 4px;
+    line-height: 1;
+    font-size: 0.88em;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+/* Remove extra margins/padding that could shift individual columns vertically */
+.historical-table tbody td:nth-child(2) > div > div,
+.historical-table tbody td:nth-child(3) > div > div,
+.historical-table tbody td:nth-child(4) > div > div {
+    margin: 0;
+    padding: 0;
+}
+
+/* Slight responsive tweak: reduce min-height on very narrow containers to avoid overflow */
+@media (max-width: 420px) {
+    .historical-table tbody td:nth-child(2) > div,
+    .historical-table tbody td:nth-child(3) > div,
+    .historical-table tbody td:nth-child(4) > div {
+        min-height: 44px;
+        gap: 3px;
+    }
+}
+
+/* Inline header edit input */
+.header-edit-input {
+    width: 90%;
+    padding: 4px 6px;
+    font-size: 0.95em;
+    border: 1px solid #ffcdd2;
+    border-radius: 4px;
+    box-sizing: border-box;
+    text-align: center;
+}

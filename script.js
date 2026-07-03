@@ -148,6 +148,9 @@ function init() {
     
     // Seleccionar el mes actual o el primer mes si no hay mes actual
     selectMonth(currentMonth || months[0]);
+
+    // Render historical summary on initialization
+    renderHistoricalSummary();
 }
 
 function getLastTwelveMonths() {
@@ -421,6 +424,484 @@ function calculateVariationPercentage(current, previous) {
     return ((current - previous) / Math.abs(previous)) * 100;
 }
 
+/* Render the historical summary table supporting multiple dynamic year columns.
+   Columns to show are stored in allYearsData._historicalYears (array of year numbers).
+   If not present, default to [2022]. */
+function renderHistoricalSummary() {
+    const months = getLastTwelveMonths();
+    const tbody = document.getElementById('historicalBody');
+    if (!tbody) return;
+
+    // Ensure arrays to track manual edits and visible years and headers
+    if (!allYearsData._historicalManual) allYearsData._historicalManual = {};
+    if (!allYearsData._historicalHeaders) allYearsData._historicalHeaders = {};
+    if (!allYearsData._historicalYears || !Array.isArray(allYearsData._historicalYears) || allYearsData._historicalYears.length === 0) {
+        allYearsData._historicalYears = [2022];
+    }
+    const yearsToShow = allYearsData._historicalYears.slice(); // e.g. [2022, 2023, ...]
+
+    // Ensure header placeholders exist
+    yearsToShow.forEach(y => {
+        if (!allYearsData._historicalHeaders[y]) {
+            allYearsData._historicalHeaders[y] = { yearLabel: String(y), sub: ['ALDO', 'MARCOS'] };
+        }
+    });
+
+    // helper: get manual month object for a given year+month
+    function getManual(year, month) {
+        if (!allYearsData._historicalManual[year]) return { aldo: { bruto: 0, liq: 0, pct: 0 }, marcos: { bruto: 0, liq: 0, pct: 0 } };
+        return allYearsData._historicalManual[year][month] || { aldo: { bruto: 0, liq: 0, pct: 0 }, marcos: { bruto: 0, liq: 0, pct: 0 } };
+    }
+
+    // helper: get computed totals from stored years for a given year+month
+    function monthValues(year, month) {
+        const ydata = allYearsData[year];
+        if (!ydata || !ydata[month]) return { income: 0, expenses: 0, profit: 0 };
+        const m = ydata[month];
+        const income = Array.isArray(m.income) ? m.income.reduce((s, i) => s + (Number(i.amount) || 0), 0) : 0;
+        const expenses = Array.isArray(m.expenses) ? m.expenses.reduce((s, i) => s + (Number(i.amount) || 0), 0) : 0;
+        const profit = income - expenses;
+        return { income, expenses, profit };
+    }
+
+    // Build the table header (replace existing thead)
+    const table = document.querySelector('.historical-table');
+    if (!table) return;
+    const thead = table.querySelector('thead');
+    thead.innerHTML = '';
+
+    // First header row: MES, TOTALES, then one colspan=2 per year
+    const tr1 = document.createElement('tr');
+    const thMonth = document.createElement('th');
+    thMonth.rowSpan = 2;
+    thMonth.textContent = 'MES';
+    tr1.appendChild(thMonth);
+
+    const thTotals = document.createElement('th');
+    thTotals.rowSpan = 2;
+    thTotals.innerHTML = `<div class="totals-header"><span class="totals-title">TOTALES</span><button class="plus-icon" aria-label="Agregar" onclick="addHistoricalYearColumn()">+</button></div>`;
+    tr1.appendChild(thTotals);
+
+    yearsToShow.forEach(y => {
+        const headerInfo = allYearsData._historicalHeaders[y] || { yearLabel: String(y), sub: ['ALDO', 'MARCOS'] };
+        const thYear = document.createElement('th');
+        thYear.colSpan = 2;
+        // build year header with a delete button on the right and enable double-click editing
+        thYear.innerHTML = `<div class="year-header" style="position:relative; width:100%; box-sizing:border-box; cursor: default;">
+                                <span class="year-label" style="display:inline-block; width:100%; text-align:center;">${escapeHtml(headerInfo.yearLabel)}</span>
+                                <button style="position:absolute; right:4px; top:50%; transform:translateY(-50%); width:26px; height:26px; border-radius:50%; border:none; background:rgba(255,255,255,0.18); color:#fff; cursor:pointer;" aria-label="Eliminar año ${String(y)}" onclick="deleteHistoricalYear(${Number(y)})">×</button>
+                            </div>`;
+        // dblclick handler to edit year label
+        thYear.addEventListener('dblclick', (ev) => {
+            ev.stopPropagation();
+            startEditHeaderYear(y, thYear);
+        });
+        tr1.appendChild(thYear);
+    });
+
+    thead.appendChild(tr1);
+
+    // Second header row: ALDO / MARCOS repeated for each year (editable)
+    const tr2 = document.createElement('tr');
+    yearsToShow.forEach(y => {
+        const headerInfo = allYearsData._historicalHeaders[y] || { yearLabel: String(y), sub: ['ALDO', 'MARCOS'] };
+
+        const thA = document.createElement('th');
+        thA.textContent = headerInfo.sub && headerInfo.sub[0] ? headerInfo.sub[0] : 'ALDO';
+        thA.addEventListener('dblclick', (ev) => {
+            ev.stopPropagation();
+            startEditSubHeader(y, 0, thA);
+        });
+        tr2.appendChild(thA);
+
+        const thM = document.createElement('th');
+        thM.textContent = headerInfo.sub && headerInfo.sub[1] ? headerInfo.sub[1] : 'MARCOS';
+        thM.addEventListener('dblclick', (ev) => {
+            ev.stopPropagation();
+            startEditSubHeader(y, 1, thM);
+        });
+        tr2.appendChild(thM);
+    });
+    thead.appendChild(tr2);
+
+    // Build tbody rows (months)
+    tbody.innerHTML = '';
+
+    months.forEach(month => {
+        const tr = document.createElement('tr');
+
+        const tdMonth = document.createElement('td');
+        tdMonth.textContent = month;
+        tr.appendChild(tdMonth);
+
+        const tdTotals = document.createElement('td');
+        tdTotals.innerHTML = `
+            <div><strong>T. BRUT.</strong></div>
+            <div><strong>T.LIQ.</strong></div>
+            <div><strong>PORC. %</strong></div>
+            <div><strong>GAN / PER</strong></div>
+        `;
+        tr.appendChild(tdTotals);
+
+        // For each year column, create ALDO and MARCOS td structure (editable using manual data)
+        yearsToShow.forEach(year => {
+            const manual = getManual(year, month);
+
+            const tdA = document.createElement('td');
+            // compute total percent for this month/year combining aldo + marcos pct
+            const pctA = Number(manual.aldo && manual.aldo.pct) || 0;
+            const pctM = Number(manual.marcos && manual.marcos.pct) || 0;
+            const totalPctForMonth = pctA + pctM;
+            tdA.innerHTML = `
+                <div><input class="histor-input" data-year="${year}" data-month="${escapeHtml(month)}" data-person="aldo" data-field="bruto" value="${formatCLP(Number(manual.aldo.bruto) || 0)}" onchange="handleHistoricalInput(event)"></div>
+                <div><input class="histor-input" data-year="${year}" data-month="${escapeHtml(month)}" data-person="aldo" data-field="liq" value="${formatCLP(Number(manual.aldo.liq) || 0)}" onchange="handleHistoricalInput(event)"></div>
+                <div><input class="histor-input" data-year="${year}" data-month="${escapeHtml(month)}" data-person="aldo" data-field="pct" value="${formatCLP(Number(pctA) || 0)}" onchange="handleHistoricalInput(event)"></div>
+                <div style="display:flex;align-items:center;justify-content:center;"><strong>${formatCLP(totalPctForMonth)}</strong></div>
+            `;
+            tr.appendChild(tdA);
+
+            const tdM = document.createElement('td');
+            tdM.innerHTML = `
+                <div><input class="histor-input" data-year="${year}" data-month="${escapeHtml(month)}" data-person="marcos" data-field="bruto" value="${formatCLP(Number(manual.marcos.bruto) || 0)}" onchange="handleHistoricalInput(event)"></div>
+                <div><input class="histor-input" data-year="${year}" data-month="${escapeHtml(month)}" data-person="marcos" data-field="liq" value="${formatCLP(Number(manual.marcos.liq) || 0)}" onchange="handleHistoricalInput(event)"></div>
+                <div><input class="histor-input" data-year="${year}" data-month="${escapeHtml(month)}" data-person="marcos" data-field="pct" value="${formatCLP(Number(pctM) || 0)}" onchange="handleHistoricalInput(event)"></div>
+                <div></div>
+            `;
+            tr.appendChild(tdM);
+        });
+
+        tbody.appendChild(tr);
+    });
+
+    // Append TOTAL FINAL row: for each year show stacked totals similar to previous single-year implementation
+    (function appendTotalFinalRow() {
+        const monthsCount = months.length || 12;
+        const trFinal = document.createElement('tr');
+        trFinal.className = 'total-final-row';
+
+        const tdMonth = document.createElement('td');
+        tdMonth.textContent = 'TOTAL FINAL';
+        trFinal.appendChild(tdMonth);
+
+        const tdTotalsFinal = document.createElement('td');
+        tdTotalsFinal.innerHTML = `
+            <div><strong>T. BRUT. AÑO</strong></div>
+            <div><strong>T. BRUT. PROM:</strong></div>
+            <div><strong>T. LIQ. AÑO</strong></div>
+            <div><strong>T. LIQ. PROM.</strong></div>
+            <div><strong>PORC. % AÑO</strong></div>
+            <div><strong>PORC. % PROM.</strong></div>
+            <div><strong>GAN / PER AÑO</strong></div>
+            <div><strong>GAN / PER PROM.</strong></div>
+        `;
+        trFinal.appendChild(tdTotalsFinal);
+
+        yearsToShow.forEach(year => {
+            // compute totals for this year from manual data if present; otherwise use computed monthValues
+            let brutoAnoA = 0, brutoAnoM = 0;
+            let liqAnoA = 0, liqAnoM = 0;
+            let sumPctA = 0, sumPctM = 0;
+            let monthsWithA = 0, monthsWithM = 0;
+            let monthsWithYear = 0; // months that have any record for either person
+
+            months.forEach(m => {
+                const mm = (allYearsData._historicalManual[year] && allYearsData._historicalManual[year][m]) || { aldo: { bruto: 0, liq: 0, pct: 0 }, marcos: { bruto: 0, liq: 0, pct: 0 } };
+
+                const aBr = Number(mm.aldo.bruto) || 0;
+                const mBr = Number(mm.marcos.bruto) || 0;
+                const aLq = Number(mm.aldo.liq) || 0;
+                const mLq = Number(mm.marcos.liq) || 0;
+                const aPct = Number(mm.aldo.pct) || 0;
+                const mPct = Number(mm.marcos.pct) || 0;
+
+                brutoAnoA += aBr;
+                brutoAnoM += mBr;
+                liqAnoA += aLq;
+                liqAnoM += mLq;
+
+                const hasA = (aBr !== 0 || aLq !== 0 || aPct !== 0);
+                const hasM = (mBr !== 0 || mLq !== 0 || mPct !== 0);
+                if (hasA) monthsWithA++;
+                if (hasM) monthsWithM++;
+                if (hasA || hasM) monthsWithYear++;
+
+                sumPctA += aPct;
+                sumPctM += mPct;
+            });
+
+            // If manual totals are all zero AND the year was NOT explicitly created with manual zeros, fallback to computed totals.
+            // This ensures newly added year columns that were intentionally initialized to $0 keep $0 values.
+            if (brutoAnoA === 0 && brutoAnoM === 0 && !(allYearsData._historicalManual && allYearsData._historicalManual[year] && allYearsData._historicalManual[year].__explicit)) {
+                let totalIncome = 0, totalProfit = 0;
+                months.forEach(m => {
+                    const vals = monthValues(year, m);
+                    totalIncome += vals.income;
+                    totalProfit += vals.profit;
+                });
+                brutoAnoA = totalIncome;
+                liqAnoA = totalProfit;
+                // when falling back to computed totals, derive monthsWithYear from actual stored months
+                monthsWithYear = 0;
+                months.forEach(m => {
+                    const vals = monthValues(year, m);
+                    if ((vals.income > 0) || (vals.expenses > 0)) monthsWithYear++;
+                });
+            }
+
+            // Compute per-person averages using only months that contain data for that person.
+            const brutoPromA = monthsWithA > 0 ? brutoAnoA / monthsWithA : 0;
+            const brutoPromM = monthsWithM > 0 ? brutoAnoM / monthsWithM : 0;
+            const liqPromA = monthsWithA > 0 ? liqAnoA / monthsWithA : 0;
+            const liqPromM = monthsWithM > 0 ? liqAnoM / monthsWithM : 0;
+
+            const porcAnoA = sumPctA;
+            const porcPromA = monthsWithA > 0 ? (sumPctA / monthsWithA) : 0;
+            const porcAnoM = sumPctM;
+            const porcPromM = monthsWithM > 0 ? (sumPctM / monthsWithM) : 0;
+
+            const ganPerAno = porcAnoA + porcAnoM;
+            // GAN / PER PROM: GAN / PER AÑO dividido por la cantidad de meses que tuvieron registro en ese año
+            const ganPerProm = monthsWithYear > 0 ? (ganPerAno / monthsWithYear) : 0;
+
+            const tdA = document.createElement('td');
+            tdA.innerHTML = `
+                <div>${formatCLP(brutoAnoA)}</div>
+                <div>${formatCLP(brutoPromA)}</div>
+                <div>${formatCLP(liqAnoA)}</div>
+                <div>${formatCLP(liqPromA)}</div>
+                <div>${formatCLP(porcAnoA)}</div>
+                <div>${formatCLP(porcPromA)}</div>
+                <div><strong>${formatCLP(ganPerAno)}</strong></div>
+                <div><strong>${formatCLP(Math.round(ganPerProm))}</strong></div>
+            `;
+            trFinal.appendChild(tdA);
+
+            const tdM = document.createElement('td');
+            tdM.innerHTML = `
+                <div>${formatCLP(brutoAnoM)}</div>
+                <div>${formatCLP(brutoPromM)}</div>
+                <div>${formatCLP(liqAnoM)}</div>
+                <div>${formatCLP(liqPromM)}</div>
+                <div>${formatCLP(porcAnoM)}</div>
+                <div>${formatCLP(porcPromM)}</div>
+                <div></div>
+                <div></div>
+            `;
+            trFinal.appendChild(tdM);
+        });
+
+        tbody.appendChild(trFinal);
+    })();
+
+    // Distribute column widths to fit the visible area but reserve viewport sizing to max 5 year-pairs
+    try {
+        const wrapper = document.querySelector('.historical-table-wrapper');
+        const tableEl = document.querySelector('.historical-table');
+        if (wrapper && tableEl) {
+            // total columns in table = MES + TOTALES + 2 cells per year
+            const totalCols = 2 + (yearsToShow.length * 2);
+            // for viewport sizing, consider at most 5 years (i.e. 5*2 subcolumns) so older columns stay out of immediate view
+            const maxVisibleYears = 5;
+            const visibleColsForViewport = 2 + (Math.min(yearsToShow.length, maxVisibleYears) * 2);
+
+            const viewportWidth = wrapper.clientWidth || tableEl.clientWidth || tableEl.offsetWidth || window.innerWidth;
+            // compute column width based on visible columns so at most 5 years fit without horizontal scroll
+            const colWidth = Math.max(80, Math.floor(viewportWidth / visibleColsForViewport) - 2);
+
+            // set the table total width to accommodate all columns so extra years cause horizontal scroll
+            const totalTableWidth = totalCols * colWidth;
+            tableEl.style.width = totalTableWidth + 'px';
+
+            // apply width to header cells and body cells consistently
+            const headerCells = tableEl.querySelectorAll('thead tr:first-child th, thead tr:nth-child(2) th');
+            headerCells.forEach((th, idx) => {
+                th.style.width = colWidth + 'px';
+                th.style.minWidth = colWidth + 'px';
+                th.style.boxSizing = 'border-box';
+            });
+            const bodyRows = tableEl.querySelectorAll('tbody tr');
+            bodyRows.forEach(row => {
+                Array.from(row.children).forEach((cell, i) => {
+                    if (cell) {
+                        cell.style.width = colWidth + 'px';
+                        cell.style.minWidth = colWidth + 'px';
+                        cell.style.boxSizing = 'border-box';
+                    }
+                });
+            });
+        }
+    } catch (e) {
+        // silently ignore layout adjustments if something unexpected happens
+    }
+}
+
+/* Start editing a year header inline */
+function startEditHeaderYear(year, thElement) {
+    const hdr = allYearsData._historicalHeaders[year] || { yearLabel: String(year), sub: ['ALDO', 'MARCOS'] };
+    const span = thElement.querySelector('.year-label');
+    if (!span) return;
+    const current = span.textContent;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'header-edit-input';
+    input.value = current;
+    span.replaceWith(input);
+    input.focus();
+    input.select();
+
+    function finish(save) {
+        const val = save ? input.value.trim() || String(year) : hdr.yearLabel;
+        // persist
+        if (!allYearsData._historicalHeaders) allYearsData._historicalHeaders = {};
+        allYearsData._historicalHeaders[year] = allYearsData._historicalHeaders[year] || { yearLabel: String(year), sub: ['ALDO', 'MARCOS'] };
+        allYearsData._historicalHeaders[year].yearLabel = val;
+        saveData();
+        renderHistoricalSummary();
+    }
+
+    input.addEventListener('blur', () => finish(true));
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            input.blur();
+        } else if (e.key === 'Escape') {
+            finish(false);
+        }
+    });
+}
+
+/* Start editing a subheader inline; subIndex 0 => ALDO, 1 => MARCOS */
+function startEditSubHeader(year, subIndex, thElement) {
+    const hdr = allYearsData._historicalHeaders[year] || { yearLabel: String(year), sub: ['ALDO', 'MARCOS'] };
+    const current = hdr.sub && hdr.sub[subIndex] ? hdr.sub[subIndex] : (subIndex === 0 ? 'ALDO' : 'MARCOS');
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'header-edit-input';
+    input.value = current;
+    // replace text node content
+    while (thElement.firstChild) thElement.removeChild(thElement.firstChild);
+    thElement.appendChild(input);
+    input.focus();
+    input.select();
+
+    function finish(save) {
+        const val = save ? input.value.trim() || (subIndex === 0 ? 'ALDO' : 'MARCOS') : current;
+        if (!allYearsData._historicalHeaders) allYearsData._historicalHeaders = {};
+        allYearsData._historicalHeaders[year] = allYearsData._historicalHeaders[year] || { yearLabel: String(year), sub: ['ALDO', 'MARCOS'] };
+        allYearsData._historicalHeaders[year].sub[subIndex] = val;
+        saveData();
+        renderHistoricalSummary();
+    }
+
+    input.addEventListener('blur', () => finish(true));
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            input.blur();
+        } else if (e.key === 'Escape') {
+            finish(false);
+        }
+    });
+}
+
+/* Add a new year column to the historical table to the right of existing year columns.
+   New year value is the next integer after the current maximum shown year. */
+function addHistoricalYearColumn() {
+    if (!allYearsData._historicalYears || !Array.isArray(allYearsData._historicalYears)) {
+        allYearsData._historicalYears = [2022];
+    }
+    const yrs = allYearsData._historicalYears;
+    const maxYear = yrs.reduce((m, y) => Math.max(m, Number(y)), 0) || yrs[0] || 2022;
+    const newYear = maxYear + 1;
+    // Insert the new year at the start so the new column appears immediately next to TOTALES
+    yrs.unshift(newYear);
+
+    // ensure manual storage placeholder exists and initialize every month with zeros
+    if (!allYearsData._historicalManual) allYearsData._historicalManual = {};
+    if (!allYearsData._historicalManual[newYear]) allYearsData._historicalManual[newYear] = {};
+
+    const months = getLastTwelveMonths();
+    months.forEach(m => {
+        allYearsData._historicalManual[newYear][m] = {
+            aldo: { bruto: 0, liq: 0, pct: 0 },
+            marcos: { bruto: 0, liq: 0, pct: 0 }
+        };
+    });
+    // mark this year's manual data as explicit so the UI treats zeros as intentional (avoid falling back to computed totals)
+    allYearsData._historicalManual[newYear].__explicit = true;
+
+    // ensure header placeholders exist for the new year
+    if (!allYearsData._historicalHeaders) allYearsData._historicalHeaders = {};
+    allYearsData._historicalHeaders[newYear] = { yearLabel: String(newYear), sub: ['ALDO', 'MARCOS'] };
+
+    saveData();
+    // re-render table with new column
+    try { renderHistoricalSummary(); } catch (e) { /* ignore */ }
+}
+
+/* Remove a year column from the historical summary, including manual entries for that year */
+function deleteHistoricalYear(year) {
+    if (!confirm('Eliminar el año ' + year + ' de la tabla histórica? Esta acción no se puede deshacer.')) return;
+    // remove from visible years array
+    if (Array.isArray(allYearsData._historicalYears)) {
+        allYearsData._historicalYears = allYearsData._historicalYears.filter(y => Number(y) !== Number(year));
+    }
+    // remove any manual data stored for that year
+    if (allYearsData._historicalManual && allYearsData._historicalManual[year]) {
+        delete allYearsData._historicalManual[year];
+    }
+    saveData();
+    try { renderHistoricalSummary(); } catch (e) { /* ignore */ }
+}
+
+/* Handler for manual edits in historical table */
+function handleHistoricalInput(event) {
+    const input = event.target;
+    const year = Number(input.dataset.year);
+    const month = input.dataset.month;
+    const person = input.dataset.person; // 'aldo' or 'marcos'
+    const field = input.dataset.field; // 'bruto', 'liq', 'pct'
+    let raw = input.value || '';
+
+    // Normalize values: pct can be decimal, bruto/liq expect numbers (allow currency-like inputs)
+    if (field === 'pct') {
+        // Accept currency-formatted input like "$1.234" and convert to integer CLP
+        raw = Number(raw.toString().replace(/[^0-9-]/g, '')) || 0;
+        raw = Math.round(raw); // ensure integer CLP
+    } else {
+        // remove non digits for bruto/liq
+        raw = Number(raw.toString().replace(/\D/g, '')) || 0;
+    }
+
+    if (!allYearsData._historicalManual) allYearsData._historicalManual = {};
+    if (!allYearsData._historicalManual[year]) allYearsData._historicalManual[year] = {};
+    if (!allYearsData._historicalManual[year][month]) {
+        allYearsData._historicalManual[year][month] = {
+            aldo: { bruto: 0, liq: 0, pct: 0 },
+            marcos: { bruto: 0, liq: 0, pct: 0 }
+        };
+    }
+
+    allYearsData._historicalManual[year][month][person][field] = raw;
+    // persist and re-render footer totals
+    saveData();
+    // update footer values quickly without full rerender (but simplest: rerender)
+    try { renderHistoricalSummary(); } catch (e) { /* ignore */ }
+}
+
+/* Helper to produce plain numeric strings for input values (no currency symbol) */
+function formatPlainNumber(n) {
+    const num = Number(n) || 0;
+    return Math.round(num).toLocaleString('es-CL');
+}
+
+// format percent display (plain number with %)
+function formatPercent(n) {
+    if (n === 0) return '0%';
+    // show as integer percent (no currency)
+    return `${Math.round(n)}%`;
+}
+
 function setVariation(elementId, variation) {
     const element = document.getElementById(elementId);
     element.textContent = `${variation.toFixed(1)}%`;
@@ -508,6 +989,8 @@ function handleFileSelect(event) {
 // Agregar función para guardar datos
 function saveData() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(allYearsData));
+    // refresh historical summary when data changes
+    try { renderHistoricalSummary(); } catch (e) { /* ignore */ }
 }
 
 // Modificar las funciones que alteran datos para incluir el guardado
