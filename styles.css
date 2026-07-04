@@ -1,0 +1,744 @@
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    line-height: 1.6;
+    padding: 10px;
+    background-color: #fff5f5;
+}
+
+.container {
+    max-width: 1600px;
+    margin: 0 auto;
+}
+
+h1 {
+    text-align: center;
+    margin-bottom: 20px;
+    color: #c41e3a;
+}
+
+/* Ensure page title aligns vertically with year controls when inside the header */
+.title-year-container h1 {
+    margin: 0;               /* remove extra bottom margin that caused misalignment */
+    text-align: left;       /* keep title aligned with the year controls */
+    line-height: 1;         /* tighten line-height for predictable vertical centering */
+}
+
+h2 {
+    color: #c41e3a;
+    margin-bottom: 8px;
+}
+
+.tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+    width: 100%;
+}
+
+.tab {
+    flex: 1;
+    padding: 10px 20px;
+    font-size: 16px;
+    background-color: #ffebeb;
+    border: none;
+    cursor: pointer;
+    border-radius: 5px;
+    color: #c41e3a;
+    transition: all 0.3s ease;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.tab.active {
+    background-color: #c41e3a;
+    color: white;
+}
+
+.tab:hover {
+    background-color: #ff8080;
+    color: white;
+}
+
+.tables-container {
+    display: flex;
+    gap: 80px;
+    margin-bottom: 20px;
+}
+
+.income-section, .expenses-section {
+    flex: 1;
+}
+
+/* Allow columns to be flexible by removing fixed widths and enabling resizing */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 10px;
+    background-color: white;
+    box-shadow: 0 0 10px rgba(196, 30, 58, 0.1);
+    table-layout: fixed; /* keep layout predictable for resizing */
+}
+
+th, td {
+    border: 1px solid #ffcdd2;
+    text-align: left;
+    padding: 8px 12px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+th {
+    background-color: #c41e3a;
+    text-align: center;
+    color: white;
+    position: relative; /* for resizer */
+    user-select: none;
+}
+
+/* Resizer handle */
+.th-resizer {
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: 10px;
+    height: 100%;
+    cursor: col-resize;
+    z-index: 5;
+    background: linear-gradient(90deg, rgba(0,0,0,0), rgba(0,0,0,0.05));
+}
+
+/* Ensure inputs expand/shrink with column */
+input[type="text"],
+input[type="number"] {
+    width: 100%;
+    padding: 6px;
+    font-size: 14px;
+    border: 1px solid #ffcdd2;
+    border-radius: 4px;
+    transition: border-color 0.3s ease;
+    box-sizing: border-box;
+}
+
+input[type="number"] {
+    width: 100%;
+}
+
+.percentage-input {
+    width: 80px;
+    padding: 8px;
+    margin-right: 10px;
+    font-size: 14px;
+    border: 1px solid #ffcdd2;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+td {
+    min-width: 80px;
+}
+
+.second-floor-cell {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+input[type="text"]:focus,
+input[type="number"]:focus {
+    border-color: #c41e3a;
+    outline: none;
+}
+
+button {
+    padding: 8px 16px;
+    background-color: #c41e3a;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+button:hover {
+    background-color: #ff1a1a;
+}
+
+.final-balance {
+    text-align: center;
+    padding: 20px;
+    background-color: white;
+    border-radius: 5px;
+    box-shadow: 0 0 10px rgba(196, 30, 58, 0.1);
+    border: 2px solid #ffcdd2;
+}
+
+/* Monthly comparison layout */
+.monthly-comparison-container {
+    display: flex;
+    gap: 16px;
+    align-items: stretch;
+    margin-bottom: 12px;
+}
+
+.monthly-comparison-container .final-balance {
+    flex: 1;
+    padding: 14px;
+}
+
+.monthly-prev h2 {
+    font-size: 0.95em;
+}
+
+.month-variation {
+    margin-top: 10px;
+    font-weight: bold;
+}
+
+#monthVariation.variation-positive {
+    color: #2e7d32;
+}
+
+#monthVariation.variation-negative {
+    color: #c41e3a;
+}
+
+.final-balance p {
+    font-size: 1.3em;
+}
+
+.final-balance span {
+    font-size: 1.2em;
+    font-weight: bold;
+}
+
+tfoot {
+    font-weight: bold;
+    background-color: #fff5f5;
+}
+
+tfoot td {
+    color: #c41e3a;
+}
+
+.annual-balance {
+    margin-top: 20px;
+    display: flex;
+    gap: 40px;
+}
+
+.balance-section {
+    flex: 1;
+    padding: 20px;
+    position: relative;
+}
+
+.balance-section:first-child::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 10%;
+    height: 80%;
+    width: 2px;
+    background-color: #ffcdd2;
+}
+
+.balance-section:nth-child(2)::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 10%;
+    height: 80%;
+    width: 2px;
+    background-color: #ffcdd2;
+}
+
+.balance-section h2 {
+    margin-bottom: 15px;
+}
+
+.annual-indicators {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.annual-indicators p {
+    font-size: 1.1em;
+    color: #c41e3a;
+}
+
+.annual-indicators span {
+    font-weight: bold;
+}
+
+.header-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    gap: 20px;
+}
+
+.dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.dropbtn {
+    padding: 10px 20px;
+    font-size: 16px;
+    background-color: #c41e3a;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.dropdown-content {
+    display: none;
+    position: absolute;
+    right: 0;
+    background-color: #f9f9f9;
+    min-width: 160px;
+    box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+    z-index: 1;
+    border-radius: 4px;
+}
+
+.dropdown:hover .dropdown-content {
+    display: block;
+}
+
+.dropdown-content button {
+    width: 100%;
+    padding: 12px 16px;
+    display: block;
+    text-align: left;
+    border: none;
+    background: none;
+    color: black;
+}
+
+.backup-btn {
+    color: #2e7d32 !important;
+}
+
+.restore-btn {
+    color: #1976d2 !important;
+}
+
+.dropdown-content button:hover {
+    background-color: #f1f1f1;
+}
+
+.title-year-container {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+/* Year navigation (prev/next) buttons */
+.year-nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.year-nav-btn {
+    background: #fff;
+    color: #c41e3a;
+    border: 2px solid #c41e3a;
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 16px;
+    cursor: pointer;
+    min-width: 44px;
+    height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.year-nav-btn:hover {
+    background: #c41e3a;
+    color: white;
+    border-color: #c41e3a;
+}
+
+.year-selector {
+    margin-top: 0;
+    padding: 6px 12px;
+    font-size: 16px;
+    height: 40px;
+    line-height: 28px;
+    border: 2px solid #c41e3a;
+    border-radius: 4px;
+    background-color: white;
+    color: #c41e3a;
+    cursor: pointer;
+    outline: none;
+    display: inline-flex;
+    align-items: center;
+}
+
+.year-selector:hover {
+    border-color: #ff1a1a;
+}
+
+.year-selector:focus {
+    border-color: #ff1a1a;
+    box-shadow: 0 0 5px rgba(196, 30, 58, 0.3);
+}
+
+.delete-btn {
+    padding: 4px 8px;
+    background-color: #ff4444;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    margin-left: 10px;
+}
+
+.delete-btn:hover {
+    background-color: #cc0000;
+}
+
+#profitVariation, #avgProfitVariation, #avgIncomeVariation, #monthVariation {
+    position: relative;
+    padding-left: 15px;
+}
+
+.variation-positive::before,
+.variation-negative::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+}
+
+.variation-positive::before {
+    border-bottom: 8px solid #2e7d32;
+}
+
+.variation-negative::before {
+    border-top: 8px solid #c41e3a;
+}
+
+.variation-positive {
+    color: #2e7d32;
+}
+
+.variation-negative {
+    color: #c41e3a;
+}
+
+.transfer-button {
+    position: static;
+    bottom: auto;
+    right: auto;
+    background-color: #2196F3;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 4px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.transfer-button:hover {
+    background-color: #1976D2;
+}
+
+.header-buttons {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+/* RESUMEN HISTÓRICO */
+.historical-summary {
+    margin-top: 20px;
+    background-color: white;
+    border: 2px solid #ffcdd2;
+    box-shadow: 0 0 10px rgba(196, 30, 58, 0.06);
+    border-radius: 6px;
+    padding: 16px;
+}
+
+.historical-summary h2 {
+    color: #c41e3a;
+    margin-bottom: 10px;
+    font-size: 1.1em;
+}
+
+.historical-content .hint {
+    color: #777;
+    font-size: 0.95em;
+    margin-bottom: 12px;
+}
+
+/* Table for historical summary */
+.historical-table-wrapper {
+    overflow: auto;
+}
+
+.historical-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #fff;
+    table-layout: auto; /* allow columns to size to content */
+}
+
+.historical-table thead th {
+    background: #c41e3a;
+    color: #fff;
+    padding: 8px 10px;
+    text-align: center;
+    font-weight: 700;
+    /* add clearer vertical dividers in header */
+    border-right: 3px solid rgba(0,0,0,0.08);
+}
+
+/* Totals header with small "+" icon aligned to extreme right of the column */
+.totals-header {
+    position: relative;
+    display: block;          /* span full width of the header cell so button can align to column edge */
+    width: 100%;
+    padding-right: 0;        /* no extra inset; button will sit at the column edge */
+    line-height: 1;
+    vertical-align: middle;
+}
+
+.totals-title {
+    display: inline-block;
+    font-weight: 700;
+    color: #fff;
+}
+
+/* Circular plus button positioned at the extreme right edge of the column header, vertically centered */
+.plus-icon {
+    position: absolute;
+    top: 50%;
+    right: 4px;               /* place near the column's right edge */
+    transform: translateY(-50%);
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255,255,255,0.18);
+    color: #fff;
+    font-weight: 700;
+    font-size: 16px;
+    line-height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+}
+
+.plus-icon:hover {
+    background: rgba(255,255,255,0.25);
+}
+
+.historical-table tbody td,
+.historical-table tfoot td {
+    padding: 1px 3px;
+    border: 1px solid #fff0f0;
+    color: #333;
+    vertical-align: middle;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: normal; /* allow multi-line content for stacked totals */
+    line-height: 1;
+    font-size: 0.92em;
+}
+
+/* Stronger divider between main columns (MES, TOTALES, each year pair) */
+.historical-table tbody td:nth-child(2),
+.historical-table thead th:nth-child(2),
+.historical-table tbody td:nth-child(1),
+.historical-table thead th:nth-child(1) {
+    border-right: 3px solid rgba(0,0,0,0.08);
+}
+
+/* For the sequence of year columns: make a clear divider after every year pair (columns 4,6,8,...).
+   Target even columns starting from the 4th so the divider appears between each year's two subcolumns. */
+.historical-table tbody td:nth-child(n+4):nth-child(even),
+.historical-table thead th:nth-child(n+4):nth-child(even) {
+    border-right: 3px solid rgba(0,0,0,0.08);
+}
+
+/* Subcolumns (the individual ALDO / MARCOS cells) have a subtler separation */
+.historical-table tbody td:nth-child(n+3),
+.historical-table thead th:nth-child(n+3),
+.historical-table tfoot td:nth-child(n+3) {
+    border-right: 1px solid rgba(0,0,0,0.04);
+}
+
+/* Ensure the very last cell in a row doesn't get an extra thick border on the right */
+.historical-table tbody tr td:last-child,
+.historical-table thead tr th:last-child,
+.historical-table tfoot tr td:last-child {
+    border-right: 1px solid rgba(0,0,0,0.04);
+}
+
+.historical-table tbody tr:nth-child(odd) {
+    background: #fff5f5;
+}
+
+.historical-table tfoot td {
+    font-weight: 700;
+    background: #fff5f5;
+    color: #c41e3a;
+}
+
+/* Make MES and TOTALES shrink-to-fit; year columns are flexible and centered */
+/* MES column (1st) shown in bold for emphasis */
+.historical-table thead th:nth-child(1),
+.historical-table tbody td:nth-child(1) {
+    white-space: nowrap;
+    width: 1px; /* shrink-to-fit */
+    max-width: 220px;
+    text-align: center;
+    overflow: visible;
+    font-weight: 700;
+}
+
+/* TOTALES column (2nd) keeps previous styling */
+.historical-table thead th:nth-child(2),
+.historical-table tbody td:nth-child(2) {
+    white-space: nowrap;
+    width: 1px; /* shrink-to-fit */
+    max-width: 220px;
+    text-align: center;
+    overflow: visible;
+}
+
+/* Center all year-related columns (any column from the 3rd onward) so ALDO/MARCOS stay aligned regardless of how many years are added */
+.historical-table thead th:nth-child(n+3),
+.historical-table tbody td:nth-child(n+3),
+.historical-table tfoot td:nth-child(n+3) {
+    text-align: center;
+}
+
+/* Style for historical editable inputs (ALDO / MARCOS fields) */
+.histor-input-wrapper { display:flex; justify-content:center; }
+.histor-input {
+    width: 100px;
+    max-width: 100%;
+    padding: 4px 6px;
+    border: 1px solid #ffcdd2;
+    border-radius: 4px;
+    text-align: center;
+    font-size: 0.88em;
+    background: #fff;
+    box-sizing: border-box;
+    margin: 2px 0; /* reduced vertical spacing for compact rows */
+}
+
+/* Make the stacked content of table columns share a uniform vertical container per row.
+   Use flex with space-between so the stacked lines align across all year columns. */
+.historical-table tbody tr td > .stacked-lines,
+.historical-table tbody tr td > div.stacked-lines,
+.historical-table tbody td > div {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    min-height: 34px;
+    padding: 2px 2px;
+    box-sizing: border-box;
+    gap: 2px;
+}
+
+/* Ensure each individual stacked line has consistent min-height and centering */
+.historical-table tbody tr td > div > div,
+.historical-table tbody tr td > div > .histor-input,
+.historical-table tbody tr td > div > input.histor-input,
+.historical-table tbody tr td > div > span,
+.historical-table tbody tr td > div > strong {
+    min-height: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+}
+
+/* Ensure each individual stacked line has consistent min-height and centering */
+.historical-table tbody tr td > div > div,
+.historical-table tbody tr td > div > .histor-input,
+.historical-table tbody tr td > div > input.histor-input,
+.historical-table tbody tr td > div > span,
+.historical-table tbody tr td > div > strong {
+    min-height: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+}
+
+/* Match input heights and remove extra vertical padding so visual baselines align */
+.histor-input {
+    height: 18px;
+    padding: 1px 4px;
+    line-height: 1;
+    font-size: 0.88em;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+/* Remove extra margins/padding that could shift individual columns vertically */
+.historical-table tbody td:nth-child(2) > div > div,
+.historical-table tbody td:nth-child(3) > div > div,
+.historical-table tbody td:nth-child(4) > div > div {
+    margin: 0;
+    padding: 0;
+}
+
+/* Slight responsive tweak: reduce min-height on very narrow containers to avoid overflow */
+@media (max-width: 420px) {
+    .historical-table tbody td:nth-child(2) > div,
+    .historical-table tbody td:nth-child(3) > div,
+    .historical-table tbody td:nth-child(4) > div {
+        min-height: 44px;
+        gap: 3px;
+    }
+}
+
+/* Make GAN / PER monthly numbers slightly larger */
+.historical-table tbody tr:not(.total-final-row) td > div > strong {
+    font-size: 1.15em;
+    line-height: 1;
+    font-weight: 700;
+}
+
+/* Make GAN / PER AÑO and GAN / PER PROM. in the TOTAL FINAL row slightly larger for emphasis */
+.historical-table tbody tr.total-final-row td > div > strong {
+    font-size: 1.25em;
+    line-height: 1;
+    font-weight: 700;
+}
+
+/* Inline header edit input */
+.header-edit-input {
+    width: 90%;
+    padding: 4px 6px;
+    font-size: 0.95em;
+    border: 1px solid #ffcdd2;
+    border-radius: 4px;
+    box-sizing: border-box;
+    text-align: center;
+}
