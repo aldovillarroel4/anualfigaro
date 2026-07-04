@@ -561,11 +561,38 @@ function renderHistoricalSummary() {
             tr.appendChild(tdA);
 
             const tdM = document.createElement('td');
+
+            // compute variation vs same month previous year for the GAN / PER total (aldo+marcos)
+            const prevYearForVar = Number(year) - 1;
+            // try manual previous year values first
+            let prevManual = (allYearsData._historicalManual && allYearsData._historicalManual[prevYearForVar] && allYearsData._historicalManual[prevYearForVar][month]) || null;
+            let prevTotal = 0;
+            if (prevManual) {
+                const prevA = Number(prevManual.aldo && prevManual.aldo.pct) || 0;
+                const prevM = Number(prevManual.marcos && prevManual.marcos.pct) || 0;
+                prevTotal = prevA + prevM;
+            } else {
+                // fallback to computed profit for previous year/month (if available)
+                const mv = monthValues(prevYearForVar, month);
+                prevTotal = mv.profit || 0;
+            }
+
+            const currentTotal = totalPctForMonth || 0;
+            let variationPercent = 0;
+            if (prevTotal === 0) {
+                variationPercent = currentTotal > 0 ? 100 : 0;
+            } else {
+                variationPercent = ((currentTotal - prevTotal) / Math.abs(prevTotal)) * 100;
+            }
+
+            // choose class for color indicator
+            const varClass = variationPercent > 0 ? 'variation-positive' : 'variation-negative';
+
             tdM.innerHTML = `
                 <div><input class="histor-input" data-year="${year}" data-month="${escapeHtml(month)}" data-person="marcos" data-field="bruto" value="${formatCLP(Number(manual.marcos.bruto) || 0)}" onchange="handleHistoricalInput(event)"></div>
                 <div><input class="histor-input" data-year="${year}" data-month="${escapeHtml(month)}" data-person="marcos" data-field="liq" value="${formatCLP(Number(manual.marcos.liq) || 0)}" onchange="handleHistoricalInput(event)"></div>
                 <div><input class="histor-input" data-year="${year}" data-month="${escapeHtml(month)}" data-person="marcos" data-field="pct" value="${formatCLP(Number(pctM) || 0)}" onchange="handleHistoricalInput(event)"></div>
-                <div></div>
+                <div><strong class="${varClass}">${variationPercent.toFixed(1)}%</strong></div>
             `;
             tr.appendChild(tdM);
         });
@@ -676,6 +703,61 @@ function renderHistoricalSummary() {
             `;
             trFinal.appendChild(tdA);
 
+            // compute variation for GAN / PER PROM. vs previous year (using same logic as for the combined GAN / PER PROM.)
+            const prevYearForTotals = Number(year) - 1;
+
+            // helper to compute ganPerProm for a given year (using manual data if present, otherwise computed fallback)
+            function computeGanPerPromForYear(y) {
+                let brutoAnoA_p = 0, brutoAnoM_p = 0;
+                let liqAnoA_p = 0, liqAnoM_p = 0;
+                let sumPctA_p = 0, sumPctM_p = 0;
+                let monthsWithYear_p = 0;
+                months.forEach(m => {
+                    const mm_p = (allYearsData._historicalManual[y] && allYearsData._historicalManual[y][m]) || { aldo: { bruto: 0, liq: 0, pct: 0 }, marcos: { bruto: 0, liq: 0, pct: 0 } };
+                    const aBr_p = Number(mm_p.aldo.bruto) || 0;
+                    const mBr_p = Number(mm_p.marcos.bruto) || 0;
+                    const aLq_p = Number(mm_p.aldo.liq) || 0;
+                    const mLq_p = Number(mm_p.marcos.liq) || 0;
+                    const aPct_p = Number(mm_p.aldo.pct) || 0;
+                    const mPct_p = Number(mm_p.marcos.pct) || 0;
+                    brutoAnoA_p += aBr_p;
+                    brutoAnoM_p += mBr_p;
+                    liqAnoA_p += aLq_p;
+                    liqAnoM_p += mLq_p;
+                    const hasAny = (aBr_p !== 0 || aLq_p !== 0 || aPct_p !== 0 || mBr_p !== 0 || mLq_p !== 0 || mPct_p !== 0);
+                    if (hasAny) monthsWithYear_p++;
+                    sumPctA_p += aPct_p;
+                    sumPctM_p += mPct_p;
+                });
+
+                // fallback to computed totals if manual zeros and not explicitly provided
+                if (brutoAnoA_p === 0 && brutoAnoM_p === 0 && !(allYearsData._historicalManual && allYearsData._historicalManual[y] && allYearsData._historicalManual[y].__explicit)) {
+                    let totalProfit_p = 0;
+                    months.forEach(m => {
+                        const vals_p = monthValues(y, m);
+                        totalProfit_p += vals_p.profit;
+                        if ((vals_p.income > 0) || (vals_p.expenses > 0)) { /* count monthsWithYear_p via actual data */ }
+                    });
+                    // derive monthsWithYear_p from stored months
+                    monthsWithYear_p = 0;
+                    months.forEach(m => {
+                        const vals_p = monthValues(y, m);
+                        if ((vals_p.income > 0) || (vals_p.expenses > 0)) monthsWithYear_p++;
+                    });
+                    // use combined profit as "ganPerAno" fallback; here we return ganPerProm fallback
+                    const ganPerAnoFallback = totalProfit_p;
+                    const ganPerPromFallback = monthsWithYear_p > 0 ? (ganPerAnoFallback / monthsWithYear_p) : 0;
+                    return ganPerPromFallback;
+                }
+
+                const ganPerAno_p = sumPctA_p + sumPctM_p;
+                const ganPerProm_p = monthsWithYear_p > 0 ? (ganPerAno_p / monthsWithYear_p) : 0;
+                return ganPerProm_p;
+            }
+
+            const prevGanPerProm = computeGanPerPromForYear(prevYearForTotals);
+            const variationForGanPerProm = calculateVariationPercentage(Math.round(ganPerProm), Math.round(prevGanPerProm));
+            const varClassFinal = variationForGanPerProm > 0 ? 'variation-positive' : 'variation-negative';
             const tdM = document.createElement('td');
             tdM.innerHTML = `
                 <div>${formatCLP(brutoAnoM)}</div>
@@ -684,8 +766,9 @@ function renderHistoricalSummary() {
                 <div>${formatCLP(liqPromM)}</div>
                 <div>${formatCLP(porcAnoM)}</div>
                 <div>${formatCLP(porcPromM)}</div>
-                <div></div>
-                <div></div>
+                <!-- GAN / PER AÑO intentionally left blank here so it only appears under ALDO -->
+                <div><strong>&nbsp;</strong></div>
+                <div><strong class="${varClassFinal}">${variationForGanPerProm.toFixed(1)}%</strong></div>
             `;
             trFinal.appendChild(tdM);
         });

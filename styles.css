@@ -606,8 +606,18 @@ tfoot td {
 }
 
 /* Make MES and TOTALES shrink-to-fit; year columns are flexible and centered */
+/* MES column (1st) shown in bold for emphasis */
 .historical-table thead th:nth-child(1),
-.historical-table tbody td:nth-child(1),
+.historical-table tbody td:nth-child(1) {
+    white-space: nowrap;
+    width: 1px; /* shrink-to-fit */
+    max-width: 220px;
+    text-align: center;
+    overflow: visible;
+    font-weight: 700;
+}
+
+/* TOTALES column (2nd) keeps previous styling */
 .historical-table thead th:nth-child(2),
 .historical-table tbody td:nth-child(2) {
     white-space: nowrap;
@@ -706,6 +716,20 @@ tfoot td {
         min-height: 44px;
         gap: 3px;
     }
+}
+
+/* Make GAN / PER monthly numbers slightly larger */
+.historical-table tbody tr:not(.total-final-row) td > div > strong {
+    font-size: 1.15em;
+    line-height: 1;
+    font-weight: 700;
+}
+
+/* Make GAN / PER AÑO and GAN / PER PROM. in the TOTAL FINAL row slightly larger for emphasis */
+.historical-table tbody tr.total-final-row td > div > strong {
+    font-size: 1.25em;
+    line-height: 1;
+    font-weight: 700;
 }
 
 /* Inline header edit input */
