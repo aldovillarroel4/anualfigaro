@@ -125,7 +125,13 @@
 
         <!-- RESUMEN HISTÓRICO -->
         <div class="historical-summary">
-            <h2>RESUMEN HISTÓRICO</h2>
+            <div class="historical-summary-header">
+                <h2>RESUMEN HISTÓRICO</h2>
+                <div class="historical-actions">
+                    <button class="datos-mensual-btn" id="datosMensualBtn" onclick="openDatosMensual()">DATOS MENSUAL</button>
+                    <button class="datos-ano-btn" id="datosAnoBtn" onclick="openDatosAno()">DATOS AÑO</button>
+                </div>
+            </div>
             <div class="historical-content">
                 
                 <div class="historical-table-wrapper">
@@ -156,6 +162,50 @@
         </div>
 
     </div>
+    <!-- Large blank modal for "DATOS AÑO" -->
+    <div id="datosAnoModal" class="modal" aria-hidden="true" role="dialog" aria-label="Datos Año">
+        <div class="modal-content">
+            <button class="modal-close" aria-label="Cerrar" onclick="closeDatosAno()">×</button>
+            <!-- Blank large area -->
+            <div class="modal-blank-area">
+        <!-- Compact toolbar for selecting years to show/hide -->
+        <div class="chart-toolbar" aria-label="Seleccionar años para el gráfico"></div>
+        <div class="chart-canvas-wrapper" style="flex:1; min-height:0;">
+            <!-- canvas will be inserted here by script -->
+        </div>
+    </div>
+        </div>
+    </div>
+
+    <!-- Large modal for "DATOS MENSUAL" with chart and year selector -->
+    <div id="datosMensualModal" class="modal" aria-hidden="true" role="dialog" aria-label="Datos Mensual">
+        <div class="modal-content">
+            <button class="modal-close" aria-label="Cerrar" onclick="closeDatosMensual()">×</button>
+            <div class="modal-blank-area">
+                <!-- Compact top bar with year selector -->
+                <div class="chart-toolbar" style="justify-content:space-between; align-items:center; padding:8px 12px; flex-direction:column; gap:8px;">
+                    <!-- Variable selector (toggle the four series) -->
+                    <div id="variableSelector" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                        <!-- checkboxes inserted by script -->
+                    </div>
+                    <div style="display:flex; width:100%; justify-content:space-between; align-items:center;">
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <label for="mensualYearSelect" style="font-weight:700;color:#c41e3a;">Año:</label>
+                            <select id="mensualYearSelect" style="height:36px;padding:6px;border:1px solid #ffcdd2;border-radius:6px;background:#fff;color:#c41e3a;"></select>
+                        </div>
+                        <!-- multi-year toolbar appears only when exactly one variable is selected -->
+                        <div id="multiYearToolbar" class="chart-toolbar" style="flex:0 1 auto; display:none; gap:6px; padding:6px; border-radius:8px; background:#fffaf9; border:1px solid #ffdede; max-width:60%; overflow-x:auto;">
+                            <!-- year checkboxes inserted by script -->
+                        </div>
+                    </div>
+                </div>
+                <div class="chart-canvas-wrapper" style="flex:1; min-height:0; padding:8px 12px;">
+                    <!-- canvas will be inserted here by script -->
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="script.js"></script>
 </body>
 </html>

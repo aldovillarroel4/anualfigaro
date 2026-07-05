@@ -412,11 +412,29 @@ tfoot td {
     background-color: #cc0000;
 }
 
+/* Keep indicator layout for the main summary labels */
 #profitVariation, #avgProfitVariation, #avgIncomeVariation, #monthVariation {
     position: relative;
-    padding-left: 15px;
+    padding-left: 18px;
 }
 
+/* Ensure variation indicators inside the historical table (small percentage chips) render their arrows in the correct place:
+   target the strong elements used in the table so the pseudo-element appears immediately before the percentage text. */
+.historical-table .variation-positive,
+.historical-table .variation-negative,
+#profitVariation.variation-positive,
+#profitVariation.variation-negative,
+#avgProfitVariation.variation-positive,
+#avgProfitVariation.variation-negative,
+#avgIncomeVariation.variation-positive,
+#avgIncomeVariation.variation-negative,
+#monthVariation.variation-positive,
+#monthVariation.variation-negative {
+    position: relative;
+    padding-left: 18px; /* space for the arrow */
+}
+
+/* Arrow triangles for positive/negative indicators */
 .variation-positive::before,
 .variation-negative::before {
     content: '';
@@ -426,18 +444,19 @@ tfoot td {
     transform: translateY(-50%);
     width: 0;
     height: 0;
-    border-left: 5px solid transparent;
-    border-right: 5px solid transparent;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
 }
 
 .variation-positive::before {
-    border-bottom: 8px solid #2e7d32;
+    border-bottom: 10px solid #2e7d32;
 }
 
 .variation-negative::before {
-    border-top: 8px solid #c41e3a;
+    border-top: 10px solid #c41e3a;
 }
 
+/* Colors for the text itself */
 .variation-positive {
     color: #2e7d32;
 }
@@ -475,6 +494,149 @@ tfoot td {
     box-shadow: 0 0 10px rgba(196, 30, 58, 0.06);
     border-radius: 6px;
     padding: 16px;
+}
+
+/* Header row for historical summary with action button */
+.historical-summary-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.datos-ano-btn {
+    background-color: #c41e3a;
+    color: #fff;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 0.95em;
+    min-width: 96px;
+    height: 38px;
+}
+
+/* Button for DATOS MENSUAL placed to the left of DATOS AÑO */
+.datos-mensual-btn {
+    background-color: #d32f2f; /* distinct strong red */
+    color: #fff;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 0.95em;
+    min-width: 110px;
+    height: 38px;
+}
+
+.historical-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.datos-ano-btn:hover {
+    background-color: #a2162f;
+}
+
+/* Modal styles for DATOS AÑO */
+.modal {
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.45);
+    z-index: 9999;
+    padding: 20px;
+}
+
+.modal[aria-hidden="false"] {
+    display: flex;
+}
+
+.modal-content {
+    background: #fff;
+    border-radius: 8px;
+    /* make modal much wider: responsive up to a large max width */
+    width: 95vw;
+    max-width: 1600px;
+    height: 80vh;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-close {
+    position: absolute;
+    right: 12px;
+    top: 12px;
+    width: 36px;
+    height: 36px;
+    border-radius: 6px;
+    border: none;
+    background: #f44336;
+    color: #fff;
+    font-size: 18px;
+    /* Use flexbox to perfectly center the "×" both vertically and horizontally */
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 2;
+}
+
+.modal-blank-area {
+    flex: 1;
+    background: #fff; /* intentionally blank */
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Compact horizontal toolbar above chart for toggling years */
+.chart-toolbar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 8px 12px;
+    border-bottom: 1px solid #f0e6e6;
+    background: #fffaf9;
+    overflow-x: auto;
+    min-height: 44px; /* touch-friendly */
+    box-sizing: border-box;
+}
+
+/* Individual checkbox chips */
+.chart-toolbar .year-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: #fff;
+    border: 1px solid #ffcdd2;
+    border-radius: 18px;
+    font-size: 0.9em;
+    color: #c41e3a;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.chart-toolbar .year-chip input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+}
+
+.chart-canvas-wrapper {
+    flex: 1;
+    padding: 8px 12px;
+    box-sizing: border-box;
 }
 
 .historical-summary h2 {
@@ -519,6 +681,43 @@ tfoot td {
     padding-right: 0;        /* no extra inset; button will sit at the column edge */
     line-height: 1;
     vertical-align: middle;
+}
+
+/* Ensure year header delete button is perfectly centered inside its circular button */
+.historical-table .year-header {
+    position: relative;
+    width: 100%;
+    box-sizing: border-box;
+    cursor: default;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.historical-table .year-header .year-label {
+    display: inline-block;
+    width: 100%;
+    text-align: center;
+}
+
+.year-delete-btn {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255,255,255,0.18);
+    color: #fff;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    line-height: 1;
+    padding: 0;
 }
 
 .totals-title {

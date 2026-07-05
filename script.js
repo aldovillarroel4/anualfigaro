@@ -487,9 +487,9 @@ function renderHistoricalSummary() {
         const thYear = document.createElement('th');
         thYear.colSpan = 2;
         // build year header with a delete button on the right and enable double-click editing
-        thYear.innerHTML = `<div class="year-header" style="position:relative; width:100%; box-sizing:border-box; cursor: default;">
-                                <span class="year-label" style="display:inline-block; width:100%; text-align:center;">${escapeHtml(headerInfo.yearLabel)}</span>
-                                <button style="position:absolute; right:4px; top:50%; transform:translateY(-50%); width:26px; height:26px; border-radius:50%; border:none; background:rgba(255,255,255,0.18); color:#fff; cursor:pointer;" aria-label="Eliminar año ${String(y)}" onclick="deleteHistoricalYear(${Number(y)})">×</button>
+        thYear.innerHTML = `<div class="year-header">
+                                <span class="year-label">${escapeHtml(headerInfo.yearLabel)}</span>
+                                <button class="year-delete-btn" aria-label="Eliminar año ${String(y)}" onclick="deleteHistoricalYear(${Number(y)})">×</button>
                             </div>`;
         // dblclick handler to edit year label
         thYear.addEventListener('dblclick', (ev) => {
@@ -1166,6 +1166,728 @@ function transferToNextMonth() {
     // Save and reload
     saveData();
     selectMonth(nextMonth);
+}
+
+/* Open the large blank modal for "DATOS AÑO" and render the chart */
+let datosAnoChart = null;
+async function openDatosAno() {
+    const modal = document.getElementById('datosAnoModal');
+    if (!modal) return;
+    modal.setAttribute('aria-hidden', 'false');
+
+    // get toolbar and canvas wrapper
+    const blank = modal.querySelector('.modal-blank-area');
+    if (!blank) return;
+    const toolbar = blank.querySelector('.chart-toolbar');
+    const canvasWrapper = blank.querySelector('.chart-canvas-wrapper');
+
+    // ensure canvas exists
+    let canvas = canvasWrapper.querySelector('canvas#datosAnoCanvas');
+    if (!canvas) {
+        canvas = document.createElement('canvas');
+        canvas.id = 'datosAnoCanvas';
+        canvas.style.width = '100%';
+        canvas.style.height = '100%';
+        canvasWrapper.innerHTML = ''; // clear
+        canvasWrapper.appendChild(canvas);
+    }
+
+    // lazy-import Chart.js from esm.sh
+    try {
+        const { Chart, registerables } = await import('https://esm.sh/chart.js@4.4.0');
+        const ChartDataLabels = (await import('https://esm.sh/chartjs-plugin-datalabels@2.2.0')).default;
+        Chart.register(...registerables);
+        Chart.register(ChartDataLabels);
+
+        // prepare base data
+        const baseData = getChartDataFromHistorical();
+
+        // destroy previous chart
+        if (datosAnoChart) {
+            datosAnoChart.destroy();
+            datosAnoChart = null;
+        }
+
+        // create chart with full data (labels = years)
+        datosAnoChart = new Chart(canvas.getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: baseData.years,
+                datasets: [
+                    {
+                        id: 'ganPerProm',
+                        label: 'GAN / PER PROM.',
+                        data: baseData.ganPerProm,
+                        borderColor: '#c41e3a',
+                        backgroundColor: 'rgba(196,30,58,0.08)',
+                        tension: 0.25,
+                        yAxisID: 'y'
+                    },
+                    {
+                        id: 'porcPromA',
+                        label: 'PORC. % PROM. ALDO',
+                        data: baseData.porcPromA,
+                        borderColor: '#1976d2',
+                        backgroundColor: 'rgba(25,118,210,0.06)',
+                        tension: 0.25,
+                        yAxisID: 'y'
+                    },
+                    {
+                        id: 'porcPromM',
+                        label: 'PORC. % PROM. MARCOS',
+                        data: baseData.porcPromM,
+                        borderColor: '#2e7d32',
+                        backgroundColor: 'rgba(46,125,50,0.06)',
+                        tension: 0.25,
+                        yAxisID: 'y'
+                    },
+                    {
+                        id: 'tLiqPromM',
+                        label: 'T. LIQ. PROM. MARCOS',
+                        data: baseData.tLiqPromM,
+                        borderColor: '#ff9800',
+                        backgroundColor: 'rgba(255,152,0,0.06)',
+                        tension: 0.25,
+                        yAxisID: 'y'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                stacked: false,
+                layout: {
+                    padding: { left: 36, right: 36, top: 12, bottom: 12 }
+                },
+                plugins: {
+                    legend: { position: 'top' },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const val = context.raw || 0;
+                                return context.dataset.label + ': ' + new Intl.NumberFormat('es-CL', { style:'currency', currency:'CLP', maximumFractionDigits:0 }).format(val);
+                            }
+                        }
+                    },
+                    datalabels: {
+                        display: true,
+                        align: 'top',
+                        anchor: 'end',
+                        color: '#333',
+                        font: { weight: '700', size: 11 },
+                        formatter: function(value) {
+                            return new Intl.NumberFormat('es-CL', { style:'currency', currency:'CLP', maximumFractionDigits:0 }).format(value);
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        title: { display: true, text: 'CLP', font: { weight: '700' } },
+                        ticks: {
+                            callback: function(value) {
+                                return new Intl.NumberFormat('es-CL', { style:'currency', currency:'CLP', maximumFractionDigits:0 }).format(value);
+                            },
+                            font: { weight: '700' }
+                        }
+                    },
+                    x: {
+                        display: true,
+                        title: { display: true, text: 'Años', font: { weight: '700' } },
+                        offset: true,
+                        ticks: { padding: 8, font: { weight: '700' } }
+                    }
+                }
+            }
+        });
+
+        // build compact toolbar: a chip for each year to toggle its visibility in the chart
+        function rebuildToolbar(selectedYearsSet) {
+            toolbar.innerHTML = '';
+            // keep ascending chronological order
+            const years = baseData.years.slice();
+            years.forEach((y, idx) => {
+                const chip = document.createElement('label');
+                chip.className = 'year-chip';
+                chip.title = `Mostrar datos para ${y}`;
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.checked = selectedYearsSet.has(y);
+                cb.dataset.year = y;
+                cb.dataset.index = idx;
+                cb.addEventListener('change', onYearToggle);
+                chip.appendChild(cb);
+                const span = document.createElement('span');
+                span.textContent = y;
+                chip.appendChild(span);
+                toolbar.appendChild(chip);
+            });
+        }
+
+        // initial selected years: all
+        const selectedYears = new Set(baseData.years.map(String));
+        // if toolbar exists but empty, create it
+        if (toolbar) rebuildToolbar(selectedYears);
+
+        // when a year checkbox toggles, filter labels and dataset points to only show selected years
+        function onYearToggle() {
+            const checkedYears = Array.from(toolbar.querySelectorAll('input[type="checkbox"]:checked')).map(i => i.dataset.year);
+            // produce filtered labels and index mapping
+            const allLabels = baseData.years;
+            const filteredLabels = allLabels.filter(l => checkedYears.includes(l));
+            // mapping from original index -> new index; gather dataset values for checked years
+            function filterDatasetValues(originalArray) {
+                return allLabels.map((lab, i) => ({ lab, val: originalArray[i] }))
+                                .filter(obj => checkedYears.includes(obj.lab))
+                                .map(obj => obj.val);
+            }
+            // update chart data
+            datosAnoChart.data.labels = filteredLabels;
+            datosAnoChart.data.datasets.forEach(ds => {
+                if (ds.id === 'ganPerProm') ds.data = filterDatasetValues(baseData.ganPerProm);
+                if (ds.id === 'porcPromA') ds.data = filterDatasetValues(baseData.porcPromA);
+                if (ds.id === 'porcPromM') ds.data = filterDatasetValues(baseData.porcPromM);
+                if (ds.id === 'tLiqPromM') ds.data = filterDatasetValues(baseData.tLiqPromM);
+            });
+            datosAnoChart.update();
+        }
+
+        // ensure toolbar always exists (in case DOM changed)
+        if (!toolbar) {
+            const newToolbar = document.createElement('div');
+            newToolbar.className = 'chart-toolbar';
+            blank.insertBefore(newToolbar, canvasWrapper);
+            rebuildToolbar(selectedYears);
+        }
+
+    } catch (err) {
+        console.error('Error loading Chart.js or rendering chart', err);
+    }
+
+    // trap focus minimally by focusing close button
+    const closeBtn = modal.querySelector('.modal-close');
+    if (closeBtn) closeBtn.focus();
+}
+
+/* Close the DATOS AÑO modal */
+function closeDatosAno() {
+    const modal = document.getElementById('datosAnoModal');
+    if (!modal) return;
+    modal.setAttribute('aria-hidden', 'true');
+    // destroy chart instance to free memory
+    try {
+        if (datosAnoChart) {
+            datosAnoChart.destroy();
+            datosAnoChart = null;
+        }
+    } catch (e) { /* ignore */ }
+}
+
+/* DATOS MENSUAL chart instance */
+let datosMensualChart = null;
+
+/* Open the DATOS MENSUAL modal and render a monthly chart for a selected year */
+async function openDatosMensual() {
+    const modal = document.getElementById('datosMensualModal');
+    if (!modal) return;
+    modal.setAttribute('aria-hidden', 'false');
+
+    const blank = modal.querySelector('.modal-blank-area');
+    if (!blank) return;
+    const canvasWrapper = blank.querySelector('.chart-canvas-wrapper');
+    const yearSelect = document.getElementById('mensualYearSelect');
+    const variableContainer = document.getElementById('variableSelector');
+    const multiYearToolbar = document.getElementById('multiYearToolbar');
+
+    // ensure canvas exists
+    let canvas = canvasWrapper.querySelector('canvas#datosMensualCanvas');
+    if (!canvas) {
+        canvas = document.createElement('canvas');
+        canvas.id = 'datosMensualCanvas';
+        canvas.style.width = '100%';
+        canvas.style.height = '100%';
+        canvasWrapper.innerHTML = '';
+        canvasWrapper.appendChild(canvas);
+    }
+
+    // populate year selector from historical years (fallback to selectedYear)
+    const yearsList = Array.isArray(allYearsData._historicalYears) && allYearsData._historicalYears.length > 0
+        ? allYearsData._historicalYears.slice().map(Number).sort((a,b)=>a-b)
+        : [selectedYear];
+    // remove duplicates and ensure numeric
+    const uniqueYears = [...new Set(yearsList)];
+    yearSelect.innerHTML = '';
+    uniqueYears.forEach(y => {
+        const opt = document.createElement('option');
+        opt.value = y;
+        opt.textContent = y;
+        yearSelect.appendChild(opt);
+    });
+    // default to currently selected year if present
+    if (uniqueYears.includes(selectedYear)) yearSelect.value = selectedYear;
+    else yearSelect.value = uniqueYears[0];
+
+    // build variable selector (four options)
+    const variables = [
+        { id: 'ganPer', label: 'GAN / PER', color: '#c41e3a' },
+        { id: 'porcA', label: 'PORC % ALDO', color: '#1976d2' },
+        { id: 'porcM', label: 'PORC % MARCOS', color: '#2e7d32' },
+        { id: 'tLiqM', label: 'T. LIQ. MARCOS', color: '#ff9800' }
+    ];
+    variableContainer.innerHTML = '';
+    variables.forEach(v => {
+        const label = document.createElement('label');
+        label.style.display = 'inline-flex';
+        label.style.alignItems = 'center';
+        label.style.gap = '6px';
+        label.style.background = '#fff';
+        label.style.border = '1px solid #ffdede';
+        label.style.padding = '6px 8px';
+        label.style.borderRadius = '16px';
+        label.style.cursor = 'pointer';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.value = v.id;
+        cb.checked = true; // default show all
+        cb.dataset.varId = v.id;
+        cb.addEventListener('change', onVariableChange);
+        const span = document.createElement('span');
+        span.textContent = v.label;
+        span.style.color = v.color;
+        span.style.fontWeight = '700';
+        label.appendChild(cb);
+        label.appendChild(span);
+        variableContainer.appendChild(label);
+    });
+
+    // build multi-year toolbar checkboxes (for single-variable multi-year comparison)
+    function rebuildMultiYearToolbar() {
+        multiYearToolbar.innerHTML = '';
+        uniqueYears.forEach(y => {
+            const chip = document.createElement('label');
+            chip.className = 'year-chip';
+            chip.style.padding = '4px 8px';
+            chip.style.borderRadius = '12px';
+            chip.style.display = 'inline-flex';
+            chip.style.alignItems = 'center';
+            chip.style.gap = '6px';
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.value = String(y);
+            cb.checked = (String(y) === String(yearSelect.value)); // default select the year shown
+            cb.addEventListener('change', onMultiYearChange);
+            chip.appendChild(cb);
+            const span = document.createElement('span');
+            span.textContent = String(y);
+            span.style.color = '#c41e3a';
+            chip.appendChild(span);
+            multiYearToolbar.appendChild(chip);
+        });
+    }
+
+    // Helper to read selected variables
+    function getSelectedVariables() {
+        return Array.from(variableContainer.querySelectorAll('input[type="checkbox"]:checked')).map(i => i.value);
+    }
+
+    // When chart needs to show a single variable across multiple years
+    function buildSingleVariableMultiYearChart(varId, checkedYears) {
+        // each checkedYear becomes one dataset; give each year a distinct color
+        const months = getLastTwelveMonths();
+        const datasets = [];
+        // Palette of distinct colors to cycle through
+        const palette = ['#c41e3a', '#1976d2', '#2e7d32', '#ff9800', '#8e24aa', '#00796b', '#f57c00', '#512da8', '#d32f2f', '#388e3c'];
+        checkedYears.forEach((y, idx) => {
+            const d = getMonthlyChartData(Number(y));
+            let dataArr = [];
+            let label = '';
+            if (varId === 'ganPer') { dataArr = d.ganPer; label = `GAN / PER ${y}`; }
+            if (varId === 'porcA') { dataArr = d.porcA; label = `PORC % ALDO ${y}`; }
+            if (varId === 'porcM') { dataArr = d.porcM; label = `PORC % MARCOS ${y}`; }
+            if (varId === 'tLiqM') { dataArr = d.tLiqM; label = `T. LIQ. MARCOS ${y}`; }
+            const color = palette[idx % palette.length];
+            // create a subtle semi-transparent fill for the area and set point colors
+            const bg = colorToRgba(color, 0.12);
+            datasets.push({
+                id: `${varId}_${y}`,
+                label,
+                data: dataArr,
+                borderColor: color,
+                backgroundColor: bg,
+                pointBackgroundColor: color,
+                pointBorderColor: '#fff',
+                tension: 0.25,
+                fill: false
+            });
+        });
+        // update chart
+        datosMensualChart.data.labels = months;
+        datosMensualChart.data.datasets = datasets;
+        // keep legend hidden so the chart does not show variable labels
+        datosMensualChart.options.plugins.legend.display = false;
+        datosMensualChart.update();
+    }
+
+    // When chart shows multiple variables for a single year (default behavior)
+    function buildMultiVariableSingleYearChart(year) {
+        const base = getMonthlyChartData(Number(year));
+        const months = base.months;
+        const datasets = [
+            { id: 'ganPer', label: 'GAN / PER', data: base.ganPer, borderColor: '#c41e3a', tension: 0.25 },
+            { id: 'porcA', label: 'PORC. % ALDO', data: base.porcA, borderColor: '#1976d2', tension: 0.25 },
+            { id: 'porcM', label: 'PORC. % MARCOS', data: base.porcM, borderColor: '#2e7d32', tension: 0.25 },
+            { id: 'tLiqM', label: 'T. LIQ. MARCOS', data: base.tLiqM, borderColor: '#ff9800', tension: 0.25 }
+        ];
+        datosMensualChart.data.labels = months;
+        datosMensualChart.data.datasets = datasets.filter(ds => getSelectedVariables().includes(ds.id));
+        // ensure legend remains hidden (variables controlled only from the top panel)
+        datosMensualChart.options.plugins.legend.display = false;
+        datosMensualChart.update();
+    }
+
+    // variable checkbox change handler
+    function onVariableChange() {
+        const selected = getSelectedVariables();
+        if (selected.length === 1) {
+            // show multi-year toolbar
+            rebuildMultiYearToolbar();
+            multiYearToolbar.style.display = 'flex';
+            // by default ensure the currently selected year is checked
+            const checkedYears = Array.from(multiYearToolbar.querySelectorAll('input[type="checkbox"]:checked')).map(i => i.value);
+            // if none checked, check the currently selected year
+            if (checkedYears.length === 0) {
+                const cb = multiYearToolbar.querySelector(`input[value="${String(yearSelect.value)}"]`);
+                if (cb) cb.checked = true;
+            }
+            const yearsToUse = Array.from(multiYearToolbar.querySelectorAll('input[type="checkbox"]:checked')).map(i => i.value);
+            buildSingleVariableMultiYearChart(selected[0], yearsToUse.length ? yearsToUse : [String(yearSelect.value)]);
+        } else {
+            // hide multi-year toolbar and return to single-year multi-variable view
+            multiYearToolbar.style.display = 'none';
+            buildMultiVariableSingleYearChart(Number(yearSelect.value));
+        }
+    }
+
+    // multi-year toolbar change handler
+    function onMultiYearChange() {
+        const selVars = getSelectedVariables();
+        if (selVars.length !== 1) return;
+        const checkedYears = Array.from(multiYearToolbar.querySelectorAll('input[type="checkbox"]:checked')).map(i => i.value);
+        if (checkedYears.length === 0) {
+            // keep at least one year checked — revert the change
+            this.checked = true;
+            return;
+        }
+        buildSingleVariableMultiYearChart(selVars[0], checkedYears);
+    }
+
+    try {
+        const { Chart, registerables } = await import('https://esm.sh/chart.js@4.4.0');
+        const ChartDataLabels = (await import('https://esm.sh/chartjs-plugin-datalabels@2.2.0')).default;
+        Chart.register(...registerables);
+        Chart.register(ChartDataLabels);
+
+        // destroy previous
+        if (datosMensualChart) {
+            datosMensualChart.destroy();
+            datosMensualChart = null;
+        }
+
+        // initial empty chart instance (will populate datasets below)
+        const initialYear = Number(yearSelect.value);
+        const initialBase = getMonthlyChartData(initialYear);
+
+        // local plugin to draw year labels at the end of each dataset line (used for single-variable multi-year view)
+        const endLabelPlugin = {
+            id: 'endLabelPlugin',
+            afterDatasetsDraw(chart, args, options) {
+                const { ctx, chartArea: area, scales } = chart;
+                if (!chart.data || !chart.data.datasets) return;
+                const datasets = chart.data.datasets;
+                // only draw when datasets represent separate years (ids like "varId_YYYY")
+                ctx.save();
+                ctx.font = (options && options.font) ? options.font : '700 12px Arial';
+                ctx.fillStyle = (options && options.color) ? options.color : '#c41e3a';
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'middle';
+                datasets.forEach(ds => {
+                    if (!ds.data || ds.data.length === 0) return;
+                    // expect id format like "varId_YYYY"
+                    const parts = (ds.id || '').toString().split('_');
+                    if (parts.length < 2) return;
+                    const yearLabel = parts.slice(1).join('_');
+                    // find last non-null point index
+                    let lastIdx = ds.data.length - 1;
+                    while (lastIdx >= 0 && (ds.data[lastIdx] === null || typeof ds.data[lastIdx] === 'undefined')) lastIdx--;
+                    if (lastIdx < 0) return;
+                    // get meta to compute pixel position for that data index
+                    const meta = chart.getDatasetMeta(chart.data.datasets.indexOf(ds));
+                    if (!meta || !meta.data || !meta.data[lastIdx]) return;
+                    const point = meta.data[lastIdx];
+                    const x = point.x + 8; // small offset to the right
+                    const y = point.y;
+                    // clip so labels remain inside chart area horizontally
+                    const maxX = area.right - 4;
+                    const drawX = Math.min(x, maxX - 30);
+                    ctx.fillStyle = ds.borderColor || '#c41e3a';
+                    ctx.fillText(String(yearLabel), drawX, y);
+                });
+                ctx.restore();
+            }
+        };
+
+        datosMensualChart = new Chart(canvas.getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: initialBase.months,
+                datasets: []
+            },
+            plugins: [endLabelPlugin],
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                layout: { padding: { left: 40, right: 40, top: 8, bottom: 8 } },
+                plugins: {
+                    legend: { position: 'top' },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const val = context.raw || 0;
+                                return context.dataset.label + ': ' + new Intl.NumberFormat('es-CL', { style:'currency', currency:'CLP', maximumFractionDigits:0 }).format(val);
+                            }
+                        }
+                    },
+                    datalabels: {
+                        display: true,
+                        align: 'top',
+                        anchor: 'end',
+                        color: '#333',
+                        font: { weight: '700', size: 11 },
+                        formatter: function(value) {
+                            return new Intl.NumberFormat('es-CL', { style:'currency', currency:'CLP', maximumFractionDigits:0 }).format(value);
+                        }
+                    },
+                    // configuration for the endLabelPlugin (font and color)
+                    endLabelPlugin: {
+                        font: '700 12px Arial',
+                        color: '#6b6b6b'
+                    }
+                },
+                scales: {
+                    y: {
+                        display: true,
+                        title: { display: true, text: 'CLP', font: { weight: '700' } },
+                        ticks: {
+                            callback: function(value) {
+                                return new Intl.NumberFormat('es-CL', { style:'currency', currency:'CLP', maximumFractionDigits:0 }).format(value);
+                            },
+                            font: { weight: '700' }
+                        }
+                    },
+                    x: {
+                        display: true,
+                        title: { display: true, text: 'Meses', font: { weight: '700' } },
+                        offset: true,
+                        ticks: { font: { weight: '700' }, padding: 18 },
+                        grid: { drawBorder: true }
+                    }
+                }
+            }
+        });
+
+        // initially render with all variables for the selected year
+        buildMultiVariableSingleYearChart(initialYear);
+
+        // update chart when year selection changes
+        yearSelect.onchange = function() {
+            const y = Number(this.value);
+            const selectedVars = getSelectedVariables();
+            if (selectedVars.length === 1) {
+                // if multi-year toolbar visible, ensure its checkboxes reflect the selected year defaults
+                const cb = multiYearToolbar.querySelector(`input[value="${String(y)}"]`);
+                if (cb) {
+                    // if none selected, check this one
+                    const anyChecked = Array.from(multiYearToolbar.querySelectorAll('input[type="checkbox"]:checked')).length > 0;
+                    if (!anyChecked) cb.checked = true;
+                }
+                const yearsToUse = Array.from(multiYearToolbar.querySelectorAll('input[type="checkbox"]:checked')).map(i => i.value);
+                buildSingleVariableMultiYearChart(selectedVars[0], yearsToUse.length ? yearsToUse : [String(y)]);
+            } else {
+                buildMultiVariableSingleYearChart(y);
+            }
+        };
+
+    } catch (err) {
+        console.error('Error loading Chart.js for mensual chart', err);
+    }
+
+    // focus close button
+    const closeBtn = modal.querySelector('.modal-close');
+    if (closeBtn) closeBtn.focus();
+}
+
+/* Close the DATOS MENSUAL modal and destroy chart instance */
+function closeDatosMensual() {
+    const modal = document.getElementById('datosMensualModal');
+    if (!modal) return;
+    modal.setAttribute('aria-hidden', 'true');
+    try {
+        if (datosMensualChart) {
+            datosMensualChart.destroy();
+            datosMensualChart = null;
+        }
+    } catch (e) { /* ignore */ }
+}
+
+/* Build monthly chart data for a single year: months labels and four series (GAN/PER, PORC ALDO, PORC MARCOS, T.LIQ MARCOS) */
+function getMonthlyChartData(year) {
+    const months = getLastTwelveMonths(); // returns month names in Spanish
+    const ganPer = [];
+    const porcA = [];
+    const porcM = [];
+    const tLiqM = [];
+
+    months.forEach(month => {
+        // prefer manual historical entries if present
+        const manualYear = allYearsData._historicalManual && allYearsData._historicalManual[year];
+        const manual = manualYear && manualYear[month] ? manualYear[month] : null;
+
+        if (manual) {
+            const aPct = Number(manual.aldo.pct) || 0;
+            const mPct = Number(manual.marcos.pct) || 0;
+            const mLiq = Number(manual.marcos.liq) || 0;
+            const gan = aPct + mPct;
+            ganPer.push(Math.round(gan));
+            porcA.push(Math.round(aPct));
+            porcM.push(Math.round(mPct));
+            tLiqM.push(Math.round(mLiq));
+        } else {
+            // fallback: use computed values from stored financial years
+            const mv = (function() {
+                const ydata = allYearsData[year];
+                if (!ydata || !ydata[month]) return { income:0, expenses:0, profit:0 };
+                const m = ydata[month];
+                const income = Array.isArray(m.income) ? m.income.reduce((s,i)=>s+(Number(i.amount)||0),0) : 0;
+                const expenses = Array.isArray(m.expenses) ? m.expenses.reduce((s,i)=>s+(Number(i.amount)||0),0) : 0;
+                const profit = income - expenses;
+                return { income, expenses, profit };
+            })();
+            // Use profit as GAN/PER fallback, and zeros for pct/tliq where unavailable
+            ganPer.push(Math.round(mv.profit || 0));
+            porcA.push(0);
+            porcM.push(0);
+            tLiqM.push(0);
+        }
+    });
+
+    return { months, ganPer, porcA, porcM, tLiqM };
+}
+
+/* Utility: convert hex color to rgba string with given alpha */
+function colorToRgba(hex, alpha) {
+    // hex like '#rrggbb'
+    if (!hex || hex[0] !== '#' || (hex.length !== 7 && hex.length !== 4)) return `rgba(0,0,0,${alpha})`;
+    let r, g, b;
+    if (hex.length === 7) {
+        r = parseInt(hex.slice(1,3),16);
+        g = parseInt(hex.slice(3,5),16);
+        b = parseInt(hex.slice(5,7),16);
+    } else {
+        r = parseInt(hex[1]+hex[1],16);
+        g = parseInt(hex[2]+hex[2],16);
+        b = parseInt(hex[3]+hex[3],16);
+    }
+    return `rgba(${r},${g},${b},${alpha})`;
+}
+
+/* Build the chart datasets from the historical summary data stored in allYearsData */
+function getChartDataFromHistorical() {
+    const years = Array.isArray(allYearsData._historicalYears) ? allYearsData._historicalYears.slice().map(Number) : [2022];
+    // keep the order left-to-right as shown in table (we inserted years with unshift in addHistoricalYearColumn),
+    // but for chart it's clearer to reverse so chronological ascending order
+    const sortedYears = years.slice().sort((a,b) => a - b);
+
+    const ganPerProm = [];
+    const porcPromA = [];
+    const porcPromM = [];
+    const tLiqPromM = [];
+
+    const months = getLastTwelveMonths();
+
+    sortedYears.forEach(year => {
+        // compute totals similar to renderHistoricalSummary's logic
+        let sumPctA = 0, sumPctM = 0;
+        let liqAnoM = 0;
+        let monthsWithA = 0, monthsWithM = 0, monthsWithYear = 0;
+
+        months.forEach(m => {
+            const mm = (allYearsData._historicalManual && allYearsData._historicalManual[year] && allYearsData._historicalManual[year][m]) || null;
+            if (mm) {
+                const aPct = Number(mm.aldo.pct) || 0;
+                const mPct = Number(mm.marcos.pct) || 0;
+                const mLq = Number(mm.marcos.liq) || 0;
+                const aBr = Number(mm.aldo.bruto) || 0;
+                const aLq = Number(mm.aldo.liq) || 0;
+                const mBr = Number(mm.marcos.bruto) || 0;
+
+                sumPctA += aPct;
+                sumPctM += mPct;
+                liqAnoM += mLq;
+
+                const hasA = (aBr !== 0 || aLq !== 0 || aPct !== 0);
+                const hasM = (mBr !== 0 || mLq !== 0 || mPct !== 0);
+                if (hasA) monthsWithA++;
+                if (hasM) monthsWithM++;
+                if (hasA || hasM) monthsWithYear++;
+            } else {
+                // fallback to computed month values from stored financial years
+                const mv = monthValues(year, m);
+                // treat profit as pct substitute only when manual not present (aligns with fallback behavior)
+                sumPctA += 0;
+                sumPctM += 0;
+                liqAnoM += 0;
+                if ((mv.income > 0) || (mv.expenses > 0)) monthsWithYear++;
+            }
+        });
+
+        // fallback computed totals if manual not explicitly set
+        let ganPerAno = sumPctA + sumPctM;
+        if (ganPerAno === 0 && !(allYearsData._historicalManual && allYearsData._historicalManual[year] && allYearsData._historicalManual[year].__explicit)) {
+            // fallback to computed profit totals across months
+            let totalProfit = 0;
+            let countMonths = 0;
+            months.forEach(m => {
+                const mv = monthValues(year, m);
+                totalProfit += mv.profit;
+                if ((mv.income > 0) || (mv.expenses > 0)) countMonths++;
+            });
+            ganPerAno = totalProfit;
+            monthsWithYear = countMonths;
+            // for tLiqPromM we can't compute per-marcos liq from computed fallback, so set 0
+            liqAnoM = 0;
+        }
+
+        const ganPerPromVal = monthsWithYear > 0 ? (ganPerAno / monthsWithYear) : 0;
+        const porcPromAVal = monthsWithA > 0 ? (sumPctA / monthsWithA) : 0;
+        const porcPromMVal = monthsWithM > 0 ? (sumPctM / monthsWithM) : 0;
+        const tLiqPromMVal = monthsWithM > 0 ? (liqAnoM / monthsWithM) : 0;
+
+        ganPerProm.push(Math.round(ganPerPromVal));
+        porcPromA.push(Math.round(porcPromAVal));
+        porcPromM.push(Math.round(porcPromMVal));
+        tLiqPromM.push(Math.round(tLiqPromMVal));
+    });
+
+    return {
+        years: sortedYears.map(String),
+        ganPerProm,
+        porcPromA,
+        porcPromM,
+        tLiqPromM
+    };
 }
 
 // Inicializar la aplicación cuando se cargue la página
