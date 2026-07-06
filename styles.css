@@ -518,9 +518,10 @@ tfoot td {
     height: 38px;
 }
 
-/* Button for DATOS MENSUAL placed to the left of DATOS AÑO */
-.datos-mensual-btn {
-    background-color: #d32f2f; /* distinct strong red */
+/* DATOS MENSUAL & DATOS AÑO share the same visual color and hover state */
+.datos-mensual-btn,
+.datos-ano-btn {
+    background-color: #c41e3a;
     color: #fff;
     border: none;
     padding: 8px 12px;
@@ -530,6 +531,12 @@ tfoot td {
     font-size: 0.95em;
     min-width: 110px;
     height: 38px;
+}
+
+/* Unified hover behavior for both buttons */
+.datos-mensual-btn:hover,
+.datos-ano-btn:hover {
+    background-color: #a2162f;
 }
 
 .historical-actions {
@@ -651,7 +658,7 @@ tfoot td {
     margin-bottom: 12px;
 }
 
-/* Table for historical summary */
+/* Table for historical summary - borders removed for all column and subcolumn dividers */
 .historical-table-wrapper {
     overflow: auto;
 }
@@ -661,29 +668,43 @@ tfoot td {
     border-collapse: collapse;
     background: #fff;
     table-layout: auto; /* allow columns to size to content */
+    /* remove any outer border visuals */
+    border: none;
 }
 
-.historical-table thead th {
-    background: #c41e3a;
+/* Year headers (first header row, including MES and TOTALES) get a stronger red */
+.historical-table thead tr:first-child th:nth-child(1),
+.historical-table thead tr:first-child th:nth-child(2),
+.historical-table thead tr:first-child th:nth-child(n+3) {
+    background: #b71c1c; /* stronger/deeper red for year headers and MES/TOTALES */
     color: #fff;
     padding: 8px 10px;
     text-align: center;
     font-weight: 700;
-    /* add clearer vertical dividers in header */
-    border-right: 3px solid rgba(0,0,0,0.08);
+    border: none;
+}
+
+/* Subcolumn headers (second header row) use a softer/muted red background */
+.historical-table thead tr:nth-child(2) th {
+    background: #f8c7c7; /* softer, more muted red/pink */
+    color: #6b0000;      /* darker red text for contrast */
+    padding: 6px 8px;
+    text-align: center;
+    font-weight: 700;
+    border: none;
 }
 
 /* Totals header with small "+" icon aligned to extreme right of the column */
 .totals-header {
     position: relative;
-    display: block;          /* span full width of the header cell so button can align to column edge */
+    display: block;
     width: 100%;
-    padding-right: 0;        /* no extra inset; button will sit at the column edge */
+    padding-right: 0;
     line-height: 1;
     vertical-align: middle;
 }
 
-/* Ensure year header delete button is perfectly centered inside its circular button */
+/* Year header layout (unchanged visual controls) */
 .historical-table .year-header {
     position: relative;
     width: 100%;
@@ -726,11 +747,11 @@ tfoot td {
     color: #fff;
 }
 
-/* Circular plus button positioned at the extreme right edge of the column header, vertically centered */
+/* Circular plus button (unchanged) */
 .plus-icon {
     position: absolute;
     top: 50%;
-    right: 4px;               /* place near the column's right edge */
+    right: 4px;
     transform: translateY(-50%);
     width: 28px;
     height: 28px;
@@ -752,48 +773,40 @@ tfoot td {
     background: rgba(255,255,255,0.25);
 }
 
+/* Cell visuals: remove all borders so there are no column/subcolumn dividers */
+.historical-table thead th,
 .historical-table tbody td,
 .historical-table tfoot td {
-    padding: 1px 3px;
-    border: 1px solid #fff0f0;
+    padding: 6px 8px;
+    border: none;
     color: #333;
     vertical-align: middle;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: normal; /* allow multi-line content for stacked totals */
+    white-space: normal;
     line-height: 1;
     font-size: 0.92em;
+    background: transparent; /* keep row striping if desired via tbody background rules */
 }
 
-/* Stronger divider between main columns (MES, TOTALES, each year pair) */
+/* Remove any explicit right-border selectors previously used for strong dividers */
 .historical-table tbody td:nth-child(2),
 .historical-table thead th:nth-child(2),
 .historical-table tbody td:nth-child(1),
-.historical-table thead th:nth-child(1) {
-    border-right: 3px solid rgba(0,0,0,0.08);
-}
-
-/* For the sequence of year columns: make a clear divider after every year pair (columns 4,6,8,...).
-   Target even columns starting from the 4th so the divider appears between each year's two subcolumns. */
+.historical-table thead th:nth-child(1),
 .historical-table tbody td:nth-child(n+4):nth-child(even),
-.historical-table thead th:nth-child(n+4):nth-child(even) {
-    border-right: 3px solid rgba(0,0,0,0.08);
-}
-
-/* Subcolumns (the individual ALDO / MARCOS cells) have a subtler separation */
+.historical-table thead th:nth-child(n+4):nth-child(even),
 .historical-table tbody td:nth-child(n+3),
 .historical-table thead th:nth-child(n+3),
-.historical-table tfoot td:nth-child(n+3) {
-    border-right: 1px solid rgba(0,0,0,0.04);
-}
-
-/* Ensure the very last cell in a row doesn't get an extra thick border on the right */
+.historical-table tfoot td:nth-child(n+3),
 .historical-table tbody tr td:last-child,
 .historical-table thead tr th:last-child,
 .historical-table tfoot tr td:last-child {
-    border-right: 1px solid rgba(0,0,0,0.04);
+    border-right: none !important;
+    border: none !important;
 }
 
+/* Keep alternating row background but without borders */
 .historical-table tbody tr:nth-child(odd) {
     background: #fff5f5;
 }
@@ -802,10 +815,10 @@ tfoot td {
     font-weight: 700;
     background: #fff5f5;
     color: #c41e3a;
+    border: none;
 }
 
-/* Make MES and TOTALES shrink-to-fit; year columns are flexible and centered */
-/* MES column (1st) shown in bold for emphasis */
+/* MES and TOTALES sizing and text alignment remain but without borders */
 .historical-table thead th:nth-child(1),
 .historical-table tbody td:nth-child(1) {
     white-space: nowrap;
@@ -816,7 +829,6 @@ tfoot td {
     font-weight: 700;
 }
 
-/* TOTALES column (2nd) keeps previous styling */
 .historical-table thead th:nth-child(2),
 .historical-table tbody td:nth-child(2) {
     white-space: nowrap;
@@ -826,7 +838,7 @@ tfoot td {
     overflow: visible;
 }
 
-/* Center all year-related columns (any column from the 3rd onward) so ALDO/MARCOS stay aligned regardless of how many years are added */
+/* Center all year-related columns (any column from the 3rd onward) */
 .historical-table thead th:nth-child(n+3),
 .historical-table tbody td:nth-child(n+3),
 .historical-table tfoot td:nth-child(n+3) {
@@ -940,4 +952,34 @@ tfoot td {
     border-radius: 4px;
     box-sizing: border-box;
     text-align: center;
+}
+
+/* Add a clear red divider at the end of MES and TOTALES columns in the historical table.
+   Use !important to override existing rules that remove borders for historical table cells. */
+.historical-table thead th:nth-child(1),
+.historical-table tbody td:nth-child(1),
+.historical-table thead th:nth-child(2),
+.historical-table tbody td:nth-child(2) {
+    border-right: 3px solid #c41e3a !important;
+}
+
+/* Remove unwanted red divider between TOTALES and the first year's subcolumn header (col index 3).
+   This overrides any inline styles or JS-applied borders for the subheader cell immediately after TOTALES. */
+.historical-table thead tr:nth-child(2) th:nth-child(3),
+.historical-table tbody tr td:nth-child(3),
+.historical-table thead tr:first-child th:nth-child(3) {
+    border-right: none !important;
+}
+
+/* Also ensure no right borders appear between any subcolumn headers (second header row),
+   preventing accidental red dividers between subcolumns of the first year. */
+.historical-table thead tr:nth-child(2) th {
+    border-right: none !important;
+}
+
+/* Add a clear red divider at the right edge of every YEAR header cell in the first header row
+   (these are the grouped year headers starting at the 3rd column). This visually marks the
+   right boundary of each year-group header. */
+.historical-table thead tr:first-child th:nth-child(n+3) {
+    border-right: 3px solid #c41e3a !important;
 }

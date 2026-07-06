@@ -426,31 +426,35 @@ function calculateVariationPercentage(current, previous) {
 
 /* Render the historical summary table supporting multiple dynamic year columns.
    Columns to show are stored in allYearsData._historicalYears (array of year numbers).
-   If not present, default to [2022]. */
+   If not present, default to [2022]. This version supports any number of subcolumns per year,
+   adds a "+" button at the left of each year header to add a new subcolumn, renders GAN / PER
+   under the first subcolumn and the variation under the second subcolumn, and preserves column dividers. */
 function renderHistoricalSummary() {
     const months = getLastTwelveMonths();
     const tbody = document.getElementById('historicalBody');
     if (!tbody) return;
 
-    // Ensure arrays to track manual edits and visible years and headers
+    // Ensure helper structures exist
     if (!allYearsData._historicalManual) allYearsData._historicalManual = {};
     if (!allYearsData._historicalHeaders) allYearsData._historicalHeaders = {};
     if (!allYearsData._historicalYears || !Array.isArray(allYearsData._historicalYears) || allYearsData._historicalYears.length === 0) {
         allYearsData._historicalYears = [2022];
     }
-    const yearsToShow = allYearsData._historicalYears.slice(); // e.g. [2022, 2023, ...]
+    const yearsToShow = allYearsData._historicalYears.slice();
 
-    // Ensure header placeholders exist
+    // Ensure header placeholders exist and default to two subs if missing
     yearsToShow.forEach(y => {
         if (!allYearsData._historicalHeaders[y]) {
             allYearsData._historicalHeaders[y] = { yearLabel: String(y), sub: ['ALDO', 'MARCOS'] };
+        } else if (!Array.isArray(allYearsData._historicalHeaders[y].sub) || allYearsData._historicalHeaders[y].sub.length === 0) {
+            allYearsData._historicalHeaders[y].sub = ['ALDO', 'MARCOS'];
         }
     });
 
     // helper: get manual month object for a given year+month
     function getManual(year, month) {
-        if (!allYearsData._historicalManual[year]) return { aldo: { bruto: 0, liq: 0, pct: 0 }, marcos: { bruto: 0, liq: 0, pct: 0 } };
-        return allYearsData._historicalManual[year][month] || { aldo: { bruto: 0, liq: 0, pct: 0 }, marcos: { bruto: 0, liq: 0, pct: 0 } };
+        if (!allYearsData._historicalManual[year]) return {};
+        return allYearsData._historicalManual[year][month] || {};
     }
 
     // helper: get computed totals from stored years for a given year+month
@@ -470,7 +474,7 @@ function renderHistoricalSummary() {
     const thead = table.querySelector('thead');
     thead.innerHTML = '';
 
-    // First header row: MES, TOTALES, then one colspan=2 per year
+    // First header row: MES, TOTALES, then one colspan = number of subs for each year
     const tr1 = document.createElement('tr');
     const thMonth = document.createElement('th');
     thMonth.rowSpan = 2;
@@ -483,11 +487,13 @@ function renderHistoricalSummary() {
     tr1.appendChild(thTotals);
 
     yearsToShow.forEach(y => {
-        const headerInfo = allYearsData._historicalHeaders[y] || { yearLabel: String(y), sub: ['ALDO', 'MARCOS'] };
+        const headerInfo = allYearsData._historicalHeaders[y];
+        const colspan = Math.max(1, (headerInfo.sub && headerInfo.sub.length) || 2);
         const thYear = document.createElement('th');
-        thYear.colSpan = 2;
-        // build year header with a delete button on the right and enable double-click editing
-        thYear.innerHTML = `<div class="year-header">
+        thYear.colSpan = colspan;
+        // build year header with a left "+" button to add a subcolumn and delete button on the right
+        thYear.innerHTML = `<div class="year-header" style="display:flex;align-items:center;justify-content:center;position:relative;">
+                                <button class="plus-icon" aria-label="Agregar subcolumna ${String(y)}" onclick="addSubcolumn(${Number(y)})" style="position:absolute;left:6px;top:50%;transform:translateY(-50%);width:26px;height:26px;background:rgba(255,255,255,0.18);">+</button>
                                 <span class="year-label">${escapeHtml(headerInfo.yearLabel)}</span>
                                 <button class="year-delete-btn" aria-label="Eliminar año ${String(y)}" onclick="deleteHistoricalYear(${Number(y)})">×</button>
                             </div>`;
@@ -501,26 +507,26 @@ function renderHistoricalSummary() {
 
     thead.appendChild(tr1);
 
-    // Second header row: ALDO / MARCOS repeated for each year (editable)
+    // Second header row: render one th per subcolumn (editable)
     const tr2 = document.createElement('tr');
     yearsToShow.forEach(y => {
-        const headerInfo = allYearsData._historicalHeaders[y] || { yearLabel: String(y), sub: ['ALDO', 'MARCOS'] };
-
-        const thA = document.createElement('th');
-        thA.textContent = headerInfo.sub && headerInfo.sub[0] ? headerInfo.sub[0] : 'ALDO';
-        thA.addEventListener('dblclick', (ev) => {
-            ev.stopPropagation();
-            startEditSubHeader(y, 0, thA);
+        const headerInfo = allYearsData._historicalHeaders[y];
+        const subs = headerInfo.sub || ['ALDO', 'MARCOS'];
+        subs.forEach((subLabel, subIndex) => {
+            const thSub = document.createElement('th');
+            thSub.textContent = subLabel || `SUB${subIndex+1}`;
+            thSub.addEventListener('dblclick', (ev) => {
+                ev.stopPropagation();
+                startEditSubHeaderDynamic(y, subIndex, thSub);
+            });
+            // right-click context menu to offer "Eliminar subcolumna"
+            thSub.addEventListener('contextmenu', (ev) => {
+                ev.preventDefault();
+                ev.stopPropagation();
+                showSubcolumnContextMenu(ev, y, subIndex, thSub);
+            });
+            tr2.appendChild(thSub);
         });
-        tr2.appendChild(thA);
-
-        const thM = document.createElement('th');
-        thM.textContent = headerInfo.sub && headerInfo.sub[1] ? headerInfo.sub[1] : 'MARCOS';
-        thM.addEventListener('dblclick', (ev) => {
-            ev.stopPropagation();
-            startEditSubHeader(y, 1, thM);
-        });
-        tr2.appendChild(thM);
     });
     thead.appendChild(tr2);
 
@@ -543,66 +549,82 @@ function renderHistoricalSummary() {
         `;
         tr.appendChild(tdTotals);
 
-        // For each year column, create ALDO and MARCOS td structure (editable using manual data)
+        // For each year, create a td for each subcolumn
         yearsToShow.forEach(year => {
-            const manual = getManual(year, month);
+            const headerInfo = allYearsData._historicalHeaders[year];
+            const subs = headerInfo.sub || ['ALDO', 'MARCOS'];
+            const manualMonth = getManual(year, month);
 
-            const tdA = document.createElement('td');
-            // compute total percent for this month/year combining aldo + marcos pct
-            const pctA = Number(manual.aldo && manual.aldo.pct) || 0;
-            const pctM = Number(manual.marcos && manual.marcos.pct) || 0;
-            const totalPctForMonth = pctA + pctM;
-            tdA.innerHTML = `
-                <div><input class="histor-input" data-year="${year}" data-month="${escapeHtml(month)}" data-person="aldo" data-field="bruto" value="${formatCLP(Number(manual.aldo.bruto) || 0)}" onchange="handleHistoricalInput(event)"></div>
-                <div><input class="histor-input" data-year="${year}" data-month="${escapeHtml(month)}" data-person="aldo" data-field="liq" value="${formatCLP(Number(manual.aldo.liq) || 0)}" onchange="handleHistoricalInput(event)"></div>
-                <div><input class="histor-input" data-year="${year}" data-month="${escapeHtml(month)}" data-person="aldo" data-field="pct" value="${formatCLP(Number(pctA) || 0)}" onchange="handleHistoricalInput(event)"></div>
-                <div style="display:flex;align-items:center;justify-content:center;"><strong>${formatCLP(totalPctForMonth)}</strong></div>
-            `;
-            tr.appendChild(tdA);
+            subs.forEach((subLabel, subIndex) => {
+                const personKey = (subLabel || '').toString().toLowerCase().replace(/\s+/g, '_') || `sub${subIndex}`;
+                // ensure the manual structure has the key for this month
+                if (!allYearsData._historicalManual[year]) allYearsData._historicalManual[year] = {};
+                if (!allYearsData._historicalManual[year][month]) allYearsData._historicalManual[year][month] = {};
+                if (!allYearsData._historicalManual[year][month][personKey]) {
+                    // default structure similar to aldo/marcos
+                    allYearsData._historicalManual[year][month][personKey] = { bruto: 0, liq: 0, pct: 0 };
+                }
+                const manual = allYearsData._historicalManual[year][month][personKey];
 
-            const tdM = document.createElement('td');
+                // Prepare the TD content: inputs for bruto, liq, pct
+                const td = document.createElement('td');
+                // If this is the first subcolumn, show GAN / PER (sum of pct across this month's subs) at bottom
+                // If this is the second subcolumn, show variation indicator relative to previous year at bottom
+                // Others just show inputs and empty bottom cell
+                const pctThis = Number(manual.pct) || 0;
 
-            // compute variation vs same month previous year for the GAN / PER total (aldo+marcos)
-            const prevYearForVar = Number(year) - 1;
-            // try manual previous year values first
-            let prevManual = (allYearsData._historicalManual && allYearsData._historicalManual[prevYearForVar] && allYearsData._historicalManual[prevYearForVar][month]) || null;
-            let prevTotal = 0;
-            if (prevManual) {
-                const prevA = Number(prevManual.aldo && prevManual.aldo.pct) || 0;
-                const prevM = Number(prevManual.marcos && prevManual.marcos.pct) || 0;
-                prevTotal = prevA + prevM;
-            } else {
-                // fallback to computed profit for previous year/month (if available)
-                const mv = monthValues(prevYearForVar, month);
-                prevTotal = mv.profit || 0;
-            }
+                // Compute GAN / PER (sum of pct across subs for this year/month) only for display under first sub
+                let ganPerForMonth = 0;
+                if (allYearsData._historicalManual[year] && allYearsData._historicalManual[year][month]) {
+                    const mm = allYearsData._historicalManual[year][month];
+                    ganPerForMonth = Object.values(mm).reduce((s, obj) => {
+                        if (!obj || typeof obj !== 'object') return s;
+                        return s + (Number(obj.pct) || 0);
+                    }, 0);
+                } else {
+                    // fallback to computed profit
+                    const mv = monthValues(year, month);
+                    ganPerForMonth = mv.profit || 0;
+                }
 
-            const currentTotal = totalPctForMonth || 0;
-            let variationPercent = 0;
-            if (prevTotal === 0) {
-                variationPercent = currentTotal > 0 ? 100 : 0;
-            } else {
-                variationPercent = ((currentTotal - prevTotal) / Math.abs(prevTotal)) * 100;
-            }
+                // Variation calculation for the second subcolumn: compare ganPerForMonth vs previous year's same month
+                let variationHtml = '&nbsp;';
+                if (subIndex === 1) {
+                    const prevYearForVar = Number(year) - 1;
+                    // compute previous total similar to above
+                    let prevTotal = 0;
+                    if (allYearsData._historicalManual[prevYearForVar] && allYearsData._historicalManual[prevYearForVar][month]) {
+                        const prevMM = allYearsData._historicalManual[prevYearForVar][month];
+                        prevTotal = Object.values(prevMM).reduce((s, obj) => s + (Number(obj && obj.pct) || 0), 0);
+                    } else {
+                        const mv = monthValues(prevYearForVar, month);
+                        prevTotal = mv.profit || 0;
+                    }
+                    const currTotal = ganPerForMonth || 0;
+                    let variationPercent = 0;
+                    if (prevTotal === 0) variationPercent = currTotal > 0 ? 100 : 0;
+                    else variationPercent = ((currTotal - prevTotal) / Math.abs(prevTotal)) * 100;
+                    const varClass = variationPercent > 0 ? 'variation-positive' : 'variation-negative';
+                    variationHtml = `<strong class="${varClass}">${variationPercent.toFixed(1)}%</strong>`;
+                }
 
-            // choose class for color indicator
-            const varClass = variationPercent > 0 ? 'variation-positive' : 'variation-negative';
-
-            tdM.innerHTML = `
-                <div><input class="histor-input" data-year="${year}" data-month="${escapeHtml(month)}" data-person="marcos" data-field="bruto" value="${formatCLP(Number(manual.marcos.bruto) || 0)}" onchange="handleHistoricalInput(event)"></div>
-                <div><input class="histor-input" data-year="${year}" data-month="${escapeHtml(month)}" data-person="marcos" data-field="liq" value="${formatCLP(Number(manual.marcos.liq) || 0)}" onchange="handleHistoricalInput(event)"></div>
-                <div><input class="histor-input" data-year="${year}" data-month="${escapeHtml(month)}" data-person="marcos" data-field="pct" value="${formatCLP(Number(pctM) || 0)}" onchange="handleHistoricalInput(event)"></div>
-                <div><strong class="${varClass}">${variationPercent.toFixed(1)}%</strong></div>
-            `;
-            tr.appendChild(tdM);
+                td.innerHTML = `
+                    <div><input class="histor-input" data-year="${year}" data-month="${escapeHtml(month)}" data-person="${escapeHtml(personKey)}" data-field="bruto" value="${formatCLP(Number(manual.bruto) || 0)}" onchange="handleHistoricalInput(event)"></div>
+                    <div><input class="histor-input" data-year="${year}" data-month="${escapeHtml(month)}" data-person="${escapeHtml(personKey)}" data-field="liq" value="${formatCLP(Number(manual.liq) || 0)}" onchange="handleHistoricalInput(event)"></div>
+                    <div><input class="histor-input" data-year="${year}" data-month="${escapeHtml(month)}" data-person="${escapeHtml(personKey)}" data-field="pct" value="${formatCLP(Number(manual.pct) || 0)}" onchange="handleHistoricalInput(event)"></div>
+                    <div style="display:flex;align-items:center;justify-content:center;">
+                        ${subIndex === 0 ? `<strong>${formatCLP(ganPerForMonth)}</strong>` : variationHtml}
+                    </div>
+                `;
+                tr.appendChild(td);
+            });
         });
 
         tbody.appendChild(tr);
     });
 
-    // Append TOTAL FINAL row: for each year show stacked totals similar to previous single-year implementation
+    // Append TOTAL FINAL row: dynamically create one td per subcolumn per year with aggregated values
     (function appendTotalFinalRow() {
-        const monthsCount = months.length || 12;
         const trFinal = document.createElement('tr');
         trFinal.className = 'total-final-row';
 
@@ -624,178 +646,188 @@ function renderHistoricalSummary() {
         trFinal.appendChild(tdTotalsFinal);
 
         yearsToShow.forEach(year => {
-            // compute totals for this year from manual data if present; otherwise use computed monthValues
-            let brutoAnoA = 0, brutoAnoM = 0;
-            let liqAnoA = 0, liqAnoM = 0;
-            let sumPctA = 0, sumPctM = 0;
-            let monthsWithA = 0, monthsWithM = 0;
-            let monthsWithYear = 0; // months that have any record for either person
+            const headerInfo = allYearsData._historicalHeaders[year];
+            const subs = headerInfo.sub || ['ALDO', 'MARCOS'];
 
-            months.forEach(m => {
-                const mm = (allYearsData._historicalManual[year] && allYearsData._historicalManual[year][m]) || { aldo: { bruto: 0, liq: 0, pct: 0 }, marcos: { bruto: 0, liq: 0, pct: 0 } };
+            // Aggregate per subcolumn
+            subs.forEach((subLabel, subIndex) => {
+                const personKey = (subLabel || '').toString().toLowerCase().replace(/\s+/g, '_') || `sub${subIndex}`;
+                let brutoAno = 0, liqAno = 0, sumPct = 0;
+                let monthsWithPerson = 0, monthsWithYear = 0;
 
-                const aBr = Number(mm.aldo.bruto) || 0;
-                const mBr = Number(mm.marcos.bruto) || 0;
-                const aLq = Number(mm.aldo.liq) || 0;
-                const mLq = Number(mm.marcos.liq) || 0;
-                const aPct = Number(mm.aldo.pct) || 0;
-                const mPct = Number(mm.marcos.pct) || 0;
-
-                brutoAnoA += aBr;
-                brutoAnoM += mBr;
-                liqAnoA += aLq;
-                liqAnoM += mLq;
-
-                const hasA = (aBr !== 0 || aLq !== 0 || aPct !== 0);
-                const hasM = (mBr !== 0 || mLq !== 0 || mPct !== 0);
-                if (hasA) monthsWithA++;
-                if (hasM) monthsWithM++;
-                if (hasA || hasM) monthsWithYear++;
-
-                sumPctA += aPct;
-                sumPctM += mPct;
-            });
-
-            // If manual totals are all zero AND the year was NOT explicitly created with manual zeros, fallback to computed totals.
-            // This ensures newly added year columns that were intentionally initialized to $0 keep $0 values.
-            if (brutoAnoA === 0 && brutoAnoM === 0 && !(allYearsData._historicalManual && allYearsData._historicalManual[year] && allYearsData._historicalManual[year].__explicit)) {
-                let totalIncome = 0, totalProfit = 0;
                 months.forEach(m => {
-                    const vals = monthValues(year, m);
-                    totalIncome += vals.income;
-                    totalProfit += vals.profit;
-                });
-                brutoAnoA = totalIncome;
-                liqAnoA = totalProfit;
-                // when falling back to computed totals, derive monthsWithYear from actual stored months
-                monthsWithYear = 0;
-                months.forEach(m => {
-                    const vals = monthValues(year, m);
-                    if ((vals.income > 0) || (vals.expenses > 0)) monthsWithYear++;
-                });
-            }
-
-            // Compute per-person averages using only months that contain data for that person.
-            const brutoPromA = monthsWithA > 0 ? brutoAnoA / monthsWithA : 0;
-            const brutoPromM = monthsWithM > 0 ? brutoAnoM / monthsWithM : 0;
-            const liqPromA = monthsWithA > 0 ? liqAnoA / monthsWithA : 0;
-            const liqPromM = monthsWithM > 0 ? liqAnoM / monthsWithM : 0;
-
-            const porcAnoA = sumPctA;
-            const porcPromA = monthsWithA > 0 ? (sumPctA / monthsWithA) : 0;
-            const porcAnoM = sumPctM;
-            const porcPromM = monthsWithM > 0 ? (sumPctM / monthsWithM) : 0;
-
-            const ganPerAno = porcAnoA + porcAnoM;
-            // GAN / PER PROM: GAN / PER AÑO dividido por la cantidad de meses que tuvieron registro en ese año
-            const ganPerProm = monthsWithYear > 0 ? (ganPerAno / monthsWithYear) : 0;
-
-            const tdA = document.createElement('td');
-            tdA.innerHTML = `
-                <div>${formatCLP(brutoAnoA)}</div>
-                <div>${formatCLP(brutoPromA)}</div>
-                <div>${formatCLP(liqAnoA)}</div>
-                <div>${formatCLP(liqPromA)}</div>
-                <div>${formatCLP(porcAnoA)}</div>
-                <div>${formatCLP(porcPromA)}</div>
-                <div><strong>${formatCLP(ganPerAno)}</strong></div>
-                <div><strong>${formatCLP(Math.round(ganPerProm))}</strong></div>
-            `;
-            trFinal.appendChild(tdA);
-
-            // compute variation for GAN / PER PROM. vs previous year (using same logic as for the combined GAN / PER PROM.)
-            const prevYearForTotals = Number(year) - 1;
-
-            // helper to compute ganPerProm for a given year (using manual data if present, otherwise computed fallback)
-            function computeGanPerPromForYear(y) {
-                let brutoAnoA_p = 0, brutoAnoM_p = 0;
-                let liqAnoA_p = 0, liqAnoM_p = 0;
-                let sumPctA_p = 0, sumPctM_p = 0;
-                let monthsWithYear_p = 0;
-                months.forEach(m => {
-                    const mm_p = (allYearsData._historicalManual[y] && allYearsData._historicalManual[y][m]) || { aldo: { bruto: 0, liq: 0, pct: 0 }, marcos: { bruto: 0, liq: 0, pct: 0 } };
-                    const aBr_p = Number(mm_p.aldo.bruto) || 0;
-                    const mBr_p = Number(mm_p.marcos.bruto) || 0;
-                    const aLq_p = Number(mm_p.aldo.liq) || 0;
-                    const mLq_p = Number(mm_p.marcos.liq) || 0;
-                    const aPct_p = Number(mm_p.aldo.pct) || 0;
-                    const mPct_p = Number(mm_p.marcos.pct) || 0;
-                    brutoAnoA_p += aBr_p;
-                    brutoAnoM_p += mBr_p;
-                    liqAnoA_p += aLq_p;
-                    liqAnoM_p += mLq_p;
-                    const hasAny = (aBr_p !== 0 || aLq_p !== 0 || aPct_p !== 0 || mBr_p !== 0 || mLq_p !== 0 || mPct_p !== 0);
-                    if (hasAny) monthsWithYear_p++;
-                    sumPctA_p += aPct_p;
-                    sumPctM_p += mPct_p;
+                    const mmAll = (allYearsData._historicalManual[year] && allYearsData._historicalManual[year][m]) || {};
+                    const mm = mmAll[personKey] || { bruto: 0, liq: 0, pct: 0 };
+                    const br = Number(mm.bruto) || 0;
+                    const lq = Number(mm.liq) || 0;
+                    const pct = Number(mm.pct) || 0;
+                    brutoAno += br;
+                    liqAno += lq;
+                    sumPct += pct;
+                    if (br !== 0 || lq !== 0 || pct !== 0) monthsWithPerson++;
+                    // monthsWithYear counts if any person has data
+                    const anyHas = Object.values(mmAll).some(x => x && (Number(x.bruto) || Number(x.liq) || Number(x.pct)));
+                    if (anyHas) monthsWithYear++;
                 });
 
-                // fallback to computed totals if manual zeros and not explicitly provided
-                if (brutoAnoA_p === 0 && brutoAnoM_p === 0 && !(allYearsData._historicalManual && allYearsData._historicalManual[y] && allYearsData._historicalManual[y].__explicit)) {
-                    let totalProfit_p = 0;
+                // fallback: if all zeros and not explicit, try computed totals across months
+                if (brutoAno === 0 && liqAno === 0 && sumPct === 0 && !(allYearsData._historicalManual && allYearsData._historicalManual[year] && allYearsData._historicalManual[year].__explicit)) {
+                    let computedBruto = 0, computedProfit = 0, countMonths = 0;
                     months.forEach(m => {
-                        const vals_p = monthValues(y, m);
-                        totalProfit_p += vals_p.profit;
-                        if ((vals_p.income > 0) || (vals_p.expenses > 0)) { /* count monthsWithYear_p via actual data */ }
+                        const mv = monthValues(year, m);
+                        computedBruto += mv.income;
+                        computedProfit += mv.profit;
+                        if (mv.income > 0 || mv.expenses > 0) countMonths++;
                     });
-                    // derive monthsWithYear_p from stored months
-                    monthsWithYear_p = 0;
-                    months.forEach(m => {
-                        const vals_p = monthValues(y, m);
-                        if ((vals_p.income > 0) || (vals_p.expenses > 0)) monthsWithYear_p++;
-                    });
-                    // use combined profit as "ganPerAno" fallback; here we return ganPerProm fallback
-                    const ganPerAnoFallback = totalProfit_p;
-                    const ganPerPromFallback = monthsWithYear_p > 0 ? (ganPerAnoFallback / monthsWithYear_p) : 0;
-                    return ganPerPromFallback;
+                    brutoAno = computedBruto;
+                    liqAno = computedProfit;
+                    monthsWithYear = countMonths;
                 }
 
-                const ganPerAno_p = sumPctA_p + sumPctM_p;
-                const ganPerProm_p = monthsWithYear_p > 0 ? (ganPerAno_p / monthsWithYear_p) : 0;
-                return ganPerProm_p;
-            }
+                const brutoProm = monthsWithPerson > 0 ? brutoAno / monthsWithPerson : 0;
+                const liqProm = monthsWithPerson > 0 ? liqAno / monthsWithPerson : 0;
+                const porcProm = monthsWithPerson > 0 ? (sumPct / monthsWithPerson) : 0;
 
-            const prevGanPerProm = computeGanPerPromForYear(prevYearForTotals);
-            const variationForGanPerProm = calculateVariationPercentage(Math.round(ganPerProm), Math.round(prevGanPerProm));
-            const varClassFinal = variationForGanPerProm > 0 ? 'variation-positive' : 'variation-negative';
-            const tdM = document.createElement('td');
-            tdM.innerHTML = `
-                <div>${formatCLP(brutoAnoM)}</div>
-                <div>${formatCLP(brutoPromM)}</div>
-                <div>${formatCLP(liqAnoM)}</div>
-                <div>${formatCLP(liqPromM)}</div>
-                <div>${formatCLP(porcAnoM)}</div>
-                <div>${formatCLP(porcPromM)}</div>
-                <!-- GAN / PER AÑO intentionally left blank here so it only appears under ALDO -->
-                <div><strong>&nbsp;</strong></div>
-                <div><strong class="${varClassFinal}">${variationForGanPerProm.toFixed(1)}%</strong></div>
-            `;
-            trFinal.appendChild(tdM);
+                // For first subcolumn, include GAN/PER AÑO and PROM (we compute combined across subs)
+                if (subIndex === 0) {
+                    // compute ganPerAno across all subs
+                    let ganPerAno = 0;
+                    let monthsWithYearLocal = 0;
+                    months.forEach(m => {
+                        const mmAll = (allYearsData._historicalManual[year] && allYearsData._historicalManual[year][m]) || {};
+                        const sumThisMonth = Object.values(mmAll).reduce((s, obj) => s + (Number(obj && obj.pct) || 0), 0);
+                        if (sumThisMonth !== 0) monthsWithYearLocal++;
+                        ganPerAno += sumThisMonth;
+                    });
+                    if (ganPerAno === 0 && !(allYearsData._historicalManual && allYearsData._historicalManual[year] && allYearsData._historicalManual[year].__explicit)) {
+                        // fallback to computed profit totals
+                        let totalProfit = 0;
+                        let monthsCount = 0;
+                        months.forEach(m => {
+                            const mv = monthValues(year, m);
+                            totalProfit += mv.profit;
+                            if (mv.income > 0 || mv.expenses > 0) monthsCount++;
+                        });
+                        ganPerAno = totalProfit;
+                        monthsWithYearLocal = monthsCount;
+                    }
+                    const ganPerProm = monthsWithYearLocal > 0 ? (ganPerAno / monthsWithYearLocal) : 0;
+
+                    const td = document.createElement('td');
+                    td.innerHTML = `
+                        <div>${formatCLP(brutoAno)}</div>
+                        <div>${formatCLP(brutoProm)}</div>
+                        <div>${formatCLP(liqAno)}</div>
+                        <div>${formatCLP(liqProm)}</div>
+                        <div>${formatCLP(sumPct)}</div>
+                        <div>${formatCLP(porcProm)}</div>
+                        <div><strong>${formatCLP(ganPerAno)}</strong></div>
+                        <div><strong>${formatCLP(Math.round(ganPerProm))}</strong></div>
+                    `;
+                    trFinal.appendChild(td);
+                } else if (subIndex === 1) {
+                    // second subcolumn: show variation vs previous year's equivalent metric (we'll compute simple percent variation on combined GAN/PER PROM)
+                    const prevYearForTotals = Number(year) - 1;
+                    // compute current ganPerProm
+                    let currentGanPerProm = 0;
+                    let monthsWithYearLocal = 0;
+                    // compute current as combined across subs (same as above)
+                    let ganPerAnoCurr = 0;
+                    months.forEach(m => {
+                        const mmAll = (allYearsData._historicalManual[year] && allYearsData._historicalManual[year][m]) || {};
+                        const sumThisMonth = Object.values(mmAll).reduce((s, obj) => s + (Number(obj && obj.pct) || 0), 0);
+                        if (sumThisMonth !== 0) monthsWithYearLocal++;
+                        ganPerAnoCurr += sumThisMonth;
+                    });
+                    if (ganPerAnoCurr === 0 && !(allYearsData._historicalManual && allYearsData._historicalManual[year] && allYearsData._historicalManual[year].__explicit)) {
+                        let totalProfit = 0; let monthsCount = 0;
+                        months.forEach(m => {
+                            const mv = monthValues(year, m);
+                            totalProfit += mv.profit;
+                            if (mv.income > 0 || mv.expenses > 0) monthsCount++;
+                        });
+                        ganPerAnoCurr = totalProfit;
+                        monthsWithYearLocal = monthsCount;
+                    }
+                    currentGanPerProm = monthsWithYearLocal > 0 ? (ganPerAnoCurr / monthsWithYearLocal) : 0;
+
+                    // compute previous
+                    let prevGanPerProm = 0;
+                    let prevMonthsCount = 0;
+                    let prevGanPerAno = 0;
+                    months.forEach(m => {
+                        const mmAll = (allYearsData._historicalManual[prevYearForTotals] && allYearsData._historicalManual[prevYearForTotals][m]) || {};
+                        const sumThisMonth = Object.values(mmAll).reduce((s, obj) => s + (Number(obj && obj.pct) || 0), 0);
+                        if (sumThisMonth !== 0) prevMonthsCount++;
+                        prevGanPerAno += sumThisMonth;
+                    });
+                    if (prevGanPerAno === 0 && !(allYearsData._historicalManual && allYearsData._historicalManual[prevYearForTotals] && allYearsData._historicalManual[prevYearForTotals].__explicit)) {
+                        let totalProfit = 0; let monthsCount = 0;
+                        months.forEach(m => {
+                            const mv = monthValues(prevYearForTotals, m);
+                            totalProfit += mv.profit;
+                            if (mv.income > 0 || mv.expenses > 0) monthsCount++;
+                        });
+                        prevGanPerAno = totalProfit;
+                        prevMonthsCount = monthsCount;
+                    }
+                    prevGanPerProm = prevMonthsCount > 0 ? (prevGanPerAno / prevMonthsCount) : 0;
+
+                    const variationForGanPerProm = calculateVariationPercentage(Math.round(currentGanPerProm), Math.round(prevGanPerProm));
+                    const varClassFinal = variationForGanPerProm > 0 ? 'variation-positive' : 'variation-negative';
+
+                    const td = document.createElement('td');
+                    td.innerHTML = `
+                        <div>${formatCLP(brutoAno)}</div>
+                        <div>${formatCLP(brutoProm)}</div>
+                        <div>${formatCLP(liqAno)}</div>
+                        <div>${formatCLP(liqProm)}</div>
+                        <div>${formatCLP(sumPct)}</div>
+                        <div>${formatCLP(porcProm)}</div>
+                        <div><strong>&nbsp;</strong></div>
+                        <div><strong class="${varClassFinal}">${variationForGanPerProm.toFixed(1)}%</strong></div>
+                    `;
+                    trFinal.appendChild(td);
+                } else {
+                    // other subcolumns: show aggregated numbers for that sub
+                    const td = document.createElement('td');
+                    td.innerHTML = `
+                        <div>${formatCLP(brutoAno)}</div>
+                        <div>${formatCLP(brutoProm)}</div>
+                        <div>${formatCLP(liqAno)}</div>
+                        <div>${formatCLP(liqProm)}</div>
+                        <div>${formatCLP(sumPct)}</div>
+                        <div>${formatCLP(porcProm)}</div>
+                        <div><strong>&nbsp;</strong></div>
+                        <div><strong>&nbsp;</strong></div>
+                    `;
+                    trFinal.appendChild(td);
+                }
+            });
         });
 
         tbody.appendChild(trFinal);
     })();
 
-    // Distribute column widths to fit the visible area but reserve viewport sizing to max 5 year-pairs
+    // Layout adjustments: compute total columns based on actual subs per year
     try {
         const wrapper = document.querySelector('.historical-table-wrapper');
         const tableEl = document.querySelector('.historical-table');
         if (wrapper && tableEl) {
-            // total columns in table = MES + TOTALES + 2 cells per year
-            const totalCols = 2 + (yearsToShow.length * 2);
-            // for viewport sizing, consider at most 5 years (i.e. 5*2 subcolumns) so older columns stay out of immediate view
+            // total columns in table = MES + TOTALES + sum(subs per year)
+            let totalSubCols = 0;
+            yearsToShow.forEach(y => { totalSubCols += (allYearsData._historicalHeaders[y].sub || []).length; });
+            const totalCols = 2 + totalSubCols;
             const maxVisibleYears = 5;
-            const visibleColsForViewport = 2 + (Math.min(yearsToShow.length, maxVisibleYears) * 2);
+            // approximate visible columns: MES + TOTALES + up to maxVisibleYears*2 subs (use 2 subs per visible year for viewport basis)
+            const visibleColsForViewport = 2 + Math.min(totalSubCols, maxVisibleYears * 2);
 
             const viewportWidth = wrapper.clientWidth || tableEl.clientWidth || tableEl.offsetWidth || window.innerWidth;
-            // compute column width based on visible columns so at most 5 years fit without horizontal scroll
-            const colWidth = Math.max(80, Math.floor(viewportWidth / visibleColsForViewport) - 2);
+            const colWidth = Math.max(80, Math.floor(viewportWidth / Math.max(visibleColsForViewport, 1)) - 2);
 
-            // set the table total width to accommodate all columns so extra years cause horizontal scroll
             const totalTableWidth = totalCols * colWidth;
             tableEl.style.width = totalTableWidth + 'px';
 
-            // apply width to header cells and body cells consistently
             const headerCells = tableEl.querySelectorAll('thead tr:first-child th, thead tr:nth-child(2) th');
             headerCells.forEach((th, idx) => {
                 th.style.width = colWidth + 'px';
@@ -814,7 +846,102 @@ function renderHistoricalSummary() {
             });
         }
     } catch (e) {
-        // silently ignore layout adjustments if something unexpected happens
+        // ignore
+    }
+
+    // Ensure a strong vertical divider is placed at the end of each year's group of subcolumns.
+    // This computes column indices for each year's last sub and applies a thicker right border
+    // to the corresponding THEAD TH and every TBODY TD in that column.
+    try {
+        const tableEl = document.querySelector('.historical-table');
+        if (tableEl) {
+            // Set a subtle light border for all cells' right edge to match subcolumn separators,
+            // then override the true year-group boundaries with a stronger red border.
+            Array.from(tableEl.querySelectorAll('th, td')).forEach(cell => {
+                cell.style.borderRight = '1px solid #e0e0e0';
+            });
+
+            // ALSO ensure MES (col index 0) and TOTALES (col index 1) show the stronger year-divider style
+            // Apply to THEAD (only first header row to avoid adding borders between subheaders)
+            const theadRows = tableEl.querySelectorAll('thead tr');
+            const firstHead = theadRows[0];
+            if (firstHead) {
+                const thMes = firstHead.children[0];
+                const thTotals = firstHead.children[1];
+                if (thMes) thMes.style.setProperty('border-right', '3px solid #c41e3a', 'important');
+                if (thTotals) thTotals.style.setProperty('border-right', '3px solid #c41e3a', 'important');
+            }
+            // Apply to TBODY rows
+            const bodyRowsAll = tableEl.querySelectorAll('tbody tr');
+            bodyRowsAll.forEach(tr => {
+                const tdMes = tr.children[0];
+                const tdTotals = tr.children[1];
+                if (tdMes) tdMes.style.setProperty('border-right', '3px solid #c41e3a', 'important');
+                if (tdTotals) tdTotals.style.setProperty('border-right', '3px solid #c41e3a', 'important');
+            });
+            // Also apply to TFOOT if present
+            const tfootRowsAll = tableEl.querySelectorAll('tfoot tr');
+            tfootRowsAll.forEach(tr => {
+                const tfMes = tr.children[0];
+                const tfTotals = tr.children[1];
+                if (tfMes) tfMes.style.setProperty('border-right', '3px solid #c41e3a', 'important');
+                if (tfTotals) tfTotals.style.setProperty('border-right', '3px solid #c41e3a', 'important');
+            });
+
+            // compute starting offset: table columns ordering is MES (1), TOTALES (2), then subs...
+            let colOffset = 2; // zero-based index for children in rows: 0=MES,1=TOTALES, so first sub is index 2
+            yearsToShow.forEach(year => {
+                const headerInfo = allYearsData._historicalHeaders[year] || { sub: ['ALDO', 'MARCOS'] };
+                const subsCount = Math.max(1, (headerInfo.sub && headerInfo.sub.length) || 2);
+
+                // index (zero-based) of the last subcolumn for this year
+                const lastColIndex = colOffset + (subsCount - 1);
+
+                // Apply stronger right border to the FIRST header row cell that corresponds to this logical last column.
+                const firstHeadRow = theadRows[0];
+                if (firstHeadRow) {
+                    const th = firstHeadRow.children[lastColIndex];
+                    if (th) {
+                        th.style.setProperty('border-right', '3px solid #c41e3a', 'important');
+                    }
+                }
+
+                // Also apply the same strong red divider to the corresponding subheader TH
+                // in the second header row (the subcolumns row). The subheader index maps to
+                // overall column index minus the two fixed columns (MES + TOTALES).
+                const secondHeadRow = theadRows[1];
+                if (secondHeadRow) {
+                    const subHeaderIndex = lastColIndex - 2; // translate overall index to second-row index
+                    const thSub = secondHeadRow.children[subHeaderIndex];
+                    if (thSub) {
+                        thSub.style.setProperty('border-right', '3px solid #c41e3a', 'important');
+                    }
+                }
+
+                // Apply stronger right border to each tbody row cell at this index
+                const bodyRows = tableEl.querySelectorAll('tbody tr');
+                bodyRows.forEach(tr => {
+                    const td = tr.children[lastColIndex];
+                    if (td) {
+                        td.style.setProperty('border-right', '3px solid #c41e3a', 'important');
+                    }
+                });
+
+                // Apply stronger right border to each tfoot row cell at this index (if any)
+                const footRows = tableEl.querySelectorAll('tfoot tr');
+                footRows.forEach(tr => {
+                    const tf = tr.children[lastColIndex];
+                    if (tf) {
+                        tf.style.setProperty('border-right', '3px solid #c41e3a', 'important');
+                    }
+                });
+
+                // advance offset by number of subs for next year
+                colOffset += subsCount;
+            });
+        }
+    } catch (err) {
+        // ignore silently
     }
 }
 
@@ -853,22 +980,21 @@ function startEditHeaderYear(year, thElement) {
     });
 }
 
-/* Start editing a subheader inline; subIndex 0 => ALDO, 1 => MARCOS */
-function startEditSubHeader(year, subIndex, thElement) {
+/* Start editing a subheader inline for dynamic subcolumns */
+function startEditSubHeaderDynamic(year, subIndex, thElement) {
     const hdr = allYearsData._historicalHeaders[year] || { yearLabel: String(year), sub: ['ALDO', 'MARCOS'] };
-    const current = hdr.sub && hdr.sub[subIndex] ? hdr.sub[subIndex] : (subIndex === 0 ? 'ALDO' : 'MARCOS');
+    const current = hdr.sub && hdr.sub[subIndex] ? hdr.sub[subIndex] : `SUB${subIndex+1}`;
     const input = document.createElement('input');
     input.type = 'text';
     input.className = 'header-edit-input';
     input.value = current;
-    // replace text node content
     while (thElement.firstChild) thElement.removeChild(thElement.firstChild);
     thElement.appendChild(input);
     input.focus();
     input.select();
 
     function finish(save) {
-        const val = save ? input.value.trim() || (subIndex === 0 ? 'ALDO' : 'MARCOS') : current;
+        const val = save ? input.value.trim() || current : current;
         if (!allYearsData._historicalHeaders) allYearsData._historicalHeaders = {};
         allYearsData._historicalHeaders[year] = allYearsData._historicalHeaders[year] || { yearLabel: String(year), sub: ['ALDO', 'MARCOS'] };
         allYearsData._historicalHeaders[year].sub[subIndex] = val;
@@ -894,28 +1020,41 @@ function addHistoricalYearColumn() {
         allYearsData._historicalYears = [2022];
     }
     const yrs = allYearsData._historicalYears;
+
+    // Determine new year number: one greater than current maximum
     const maxYear = yrs.reduce((m, y) => Math.max(m, Number(y)), 0) || yrs[0] || 2022;
     const newYear = maxYear + 1;
+
+    // Determine template subcolumns: copy from the currently first visible year (the one immediately right of TOTALES)
+    let templateSubs = ['ALDO', 'MARCOS'];
+    if (Array.isArray(yrs) && yrs.length > 0) {
+        const firstVisible = yrs[0];
+        if (allYearsData._historicalHeaders && allYearsData._historicalHeaders[firstVisible] && Array.isArray(allYearsData._historicalHeaders[firstVisible].sub) && allYearsData._historicalHeaders[firstVisible].sub.length > 0) {
+            // clone the array so subsequent edits don't mutate the source
+            templateSubs = allYearsData._historicalHeaders[firstVisible].sub.slice();
+        }
+    }
+
     // Insert the new year at the start so the new column appears immediately next to TOTALES
     yrs.unshift(newYear);
 
-    // ensure manual storage placeholder exists and initialize every month with zeros
+    // ensure manual storage placeholder exists and initialize every month with zeros for each template subcolumn
     if (!allYearsData._historicalManual) allYearsData._historicalManual = {};
     if (!allYearsData._historicalManual[newYear]) allYearsData._historicalManual[newYear] = {};
-
     const months = getLastTwelveMonths();
     months.forEach(m => {
-        allYearsData._historicalManual[newYear][m] = {
-            aldo: { bruto: 0, liq: 0, pct: 0 },
-            marcos: { bruto: 0, liq: 0, pct: 0 }
-        };
+        allYearsData._historicalManual[newYear][m] = {};
+        templateSubs.forEach(subLabel => {
+            const personKey = subLabel.toString().toLowerCase().replace(/\s+/g, '_');
+            allYearsData._historicalManual[newYear][m][personKey] = { bruto: 0, liq: 0, pct: 0 };
+        });
     });
     // mark this year's manual data as explicit so the UI treats zeros as intentional (avoid falling back to computed totals)
     allYearsData._historicalManual[newYear].__explicit = true;
 
-    // ensure header placeholders exist for the new year
+    // ensure header placeholders exist for the new year and copy the template sublabels
     if (!allYearsData._historicalHeaders) allYearsData._historicalHeaders = {};
-    allYearsData._historicalHeaders[newYear] = { yearLabel: String(newYear), sub: ['ALDO', 'MARCOS'] };
+    allYearsData._historicalHeaders[newYear] = { yearLabel: String(newYear), sub: templateSubs.slice() };
 
     saveData();
     // re-render table with new column
@@ -933,42 +1072,42 @@ function deleteHistoricalYear(year) {
     if (allYearsData._historicalManual && allYearsData._historicalManual[year]) {
         delete allYearsData._historicalManual[year];
     }
+    // remove header info for that year
+    if (allYearsData._historicalHeaders && allYearsData._historicalHeaders[year]) {
+        delete allYearsData._historicalHeaders[year];
+    }
     saveData();
     try { renderHistoricalSummary(); } catch (e) { /* ignore */ }
 }
 
-/* Handler for manual edits in historical table */
+/* Handler for manual edits in historical table (supports dynamic person keys) */
 function handleHistoricalInput(event) {
     const input = event.target;
     const year = Number(input.dataset.year);
     const month = input.dataset.month;
-    const person = input.dataset.person; // 'aldo' or 'marcos'
+    const person = input.dataset.person; // dynamic key
     const field = input.dataset.field; // 'bruto', 'liq', 'pct'
     let raw = input.value || '';
 
     // Normalize values: pct can be decimal, bruto/liq expect numbers (allow currency-like inputs)
     if (field === 'pct') {
-        // Accept currency-formatted input like "$1.234" and convert to integer CLP
         raw = Number(raw.toString().replace(/[^0-9-]/g, '')) || 0;
-        raw = Math.round(raw); // ensure integer CLP
+        raw = Math.round(raw);
     } else {
-        // remove non digits for bruto/liq
         raw = Number(raw.toString().replace(/\D/g, '')) || 0;
     }
 
     if (!allYearsData._historicalManual) allYearsData._historicalManual = {};
     if (!allYearsData._historicalManual[year]) allYearsData._historicalManual[year] = {};
     if (!allYearsData._historicalManual[year][month]) {
-        allYearsData._historicalManual[year][month] = {
-            aldo: { bruto: 0, liq: 0, pct: 0 },
-            marcos: { bruto: 0, liq: 0, pct: 0 }
-        };
+        allYearsData._historicalManual[year][month] = {};
+    }
+    if (!allYearsData._historicalManual[year][month][person]) {
+        allYearsData._historicalManual[year][month][person] = { bruto: 0, liq: 0, pct: 0 };
     }
 
     allYearsData._historicalManual[year][month][person][field] = raw;
-    // persist and re-render footer totals
     saveData();
-    // update footer values quickly without full rerender (but simplest: rerender)
     try { renderHistoricalSummary(); } catch (e) { /* ignore */ }
 }
 
@@ -1888,6 +2027,113 @@ function getChartDataFromHistorical() {
         porcPromM,
         tLiqPromM
     };
+}
+
+/* Add a new subcolumn to a specific year: adds a sub label and initializes manual entries for each month */
+function addSubcolumn(year) {
+    if (!allYearsData._historicalHeaders) allYearsData._historicalHeaders = {};
+    if (!allYearsData._historicalHeaders[year]) allYearsData._historicalHeaders[year] = { yearLabel: String(year), sub: ['ALDO', 'MARCOS'] };
+    const subs = allYearsData._historicalHeaders[year].sub;
+    const newIndex = (subs && subs.length) ? subs.length + 1 : 1;
+    const newLabel = `SUB ${newIndex}`;
+    subs.push(newLabel);
+
+    // ensure manual data for this new sub exists for every month and year
+    if (!allYearsData._historicalManual) allYearsData._historicalManual = {};
+    if (!allYearsData._historicalManual[year]) allYearsData._historicalManual[year] = {};
+    const months = getLastTwelveMonths();
+    months.forEach(m => {
+        if (!allYearsData._historicalManual[year][m]) allYearsData._historicalManual[year][m] = {};
+        const personKey = newLabel.toString().toLowerCase().replace(/\s+/g, '_');
+        allYearsData._historicalManual[year][m][personKey] = { bruto: 0, liq: 0, pct: 0 };
+    });
+
+    saveData();
+    try { renderHistoricalSummary(); } catch (e) { /* ignore */ }
+}
+
+/* Show a simple context menu to delete a subcolumn */
+function showSubcolumnContextMenu(event, year, subIndex, thElement) {
+    // remove any existing menu
+    const existing = document.getElementById('subcolContextMenu');
+    if (existing) existing.remove();
+
+    const menu = document.createElement('div');
+    menu.id = 'subcolContextMenu';
+    menu.style.position = 'fixed';
+    menu.style.left = (event.clientX) + 'px';
+    menu.style.top = (event.clientY) + 'px';
+    menu.style.background = '#fff';
+    menu.style.border = '1px solid #e0e0e0';
+    menu.style.boxShadow = '0 4px 10px rgba(0,0,0,0.12)';
+    menu.style.padding = '6px';
+    menu.style.borderRadius = '6px';
+    menu.style.zIndex = 10000;
+    menu.style.minWidth = '160px';
+    menu.style.fontFamily = 'Arial, sans-serif';
+    menu.style.fontSize = '14px';
+
+    const btnDelete = document.createElement('div');
+    btnDelete.textContent = 'Eliminar subcolumna';
+    btnDelete.style.padding = '8px';
+    btnDelete.style.cursor = 'pointer';
+    btnDelete.style.color = '#c41e3a';
+    btnDelete.addEventListener('click', () => {
+        deleteSubcolumn(year, subIndex);
+        menu.remove();
+    });
+    menu.appendChild(btnDelete);
+
+    const btnCancel = document.createElement('div');
+    btnCancel.textContent = 'Cancelar';
+    btnCancel.style.padding = '8px';
+    btnCancel.style.cursor = 'pointer';
+    btnCancel.addEventListener('click', () => menu.remove());
+    menu.appendChild(btnCancel);
+
+    document.body.appendChild(menu);
+
+    // remove menu when clicking elsewhere or pressing Escape
+    function removeMenuHandler(ev) {
+        if (ev.type === 'keydown' && ev.key !== 'Escape') return;
+        menu.remove();
+        document.removeEventListener('click', removeMenuHandler);
+        document.removeEventListener('contextmenu', removeMenuHandler);
+        document.removeEventListener('keydown', removeMenuHandler);
+    }
+    // allow a short delay so click that opened menu doesn't immediately close it
+    setTimeout(() => {
+        document.addEventListener('click', removeMenuHandler);
+        document.addEventListener('contextmenu', removeMenuHandler);
+        document.addEventListener('keydown', removeMenuHandler);
+    }, 0);
+}
+
+/* Delete a subcolumn from a specific year, removing header label and manual entries for that person key */
+function deleteSubcolumn(year, subIndex) {
+    const hdrs = allYearsData._historicalHeaders && allYearsData._historicalHeaders[year];
+    if (!hdrs || !Array.isArray(hdrs.sub) || subIndex < 0 || subIndex >= hdrs.sub.length) {
+        return;
+    }
+    const subLabel = hdrs.sub[subIndex] || `SUB ${subIndex+1}`;
+    if (!confirm(`Eliminar la subcolumna "${subLabel}" del año ${year}? Esta acción eliminará sus datos manuales.`)) return;
+
+    // remove header label
+    hdrs.sub.splice(subIndex, 1);
+
+    // remove manual data keyed for this sub across all months
+    const personKey = subLabel.toString().toLowerCase().replace(/\s+/g, '_');
+    if (allYearsData._historicalManual && allYearsData._historicalManual[year]) {
+        const months = getLastTwelveMonths();
+        months.forEach(m => {
+            if (allYearsData._historicalManual[year][m] && allYearsData._historicalManual[year][m][personKey]) {
+                delete allYearsData._historicalManual[year][m][personKey];
+            }
+        });
+    }
+
+    saveData();
+    try { renderHistoricalSummary(); } catch (e) { /* ignore */ }
 }
 
 // Inicializar la aplicación cuando se cargue la página
